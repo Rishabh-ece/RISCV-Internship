@@ -1,10 +1,10 @@
 # RISCV-Internship
 ##  Basic Details
-**Name:** Rishabh Agarwal |
-**College:** The LNM Institute of Information Technology 
-**Email ID:** 24uec246@lnmiit.ac.in 
-**GitHub Profile:** [Rishabh-ece](https://github.com/Rishabh-ece?tab=repositories)  
-**LinkedIN Profile:** [Rishabh Agarwal](https://www.linkedin.com/in/rishabh-agarwal-ece/)
+**Name:** Rishabh Agarwal<br>
+**College:** The LNM Institute of Information Technology <br>
+**Email ID:** 24uec246@lnmiit.ac.in <br>
+**GitHub Profile:** [Rishabh-ece](https://github.com/Rishabh-ece?tab=repositories)  <br>
+**LinkedIN Profile:** [Rishabh Agarwal](https://www.linkedin.com/in/rishabh-agarwal-ece/) <br>
 
 ## Task 1: Compilation of C Program using GCC and RISC-V GCC Compiler
 

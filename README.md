@@ -1,6 +1,6 @@
 # RISCV-Internship
 ##  Basic Details
-**Name:** Rishabh Agarwal 
+**Name:** Rishabh Agarwal |
 **College:** The LNM Institute of Information Technology 
 **Email ID:** 24uec246@lnmiit.ac.in 
 **GitHub Profile:** [Rishabh-ece](https://github.com/Rishabh-ece?tab=repositories)  

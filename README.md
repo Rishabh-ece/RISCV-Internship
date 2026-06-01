@@ -1,4 +1,4 @@
-# RISCV-Internship
+# RISC-V-Internship
 ##  Basic Details
 **Name:** Rishabh Agarwal<br>
 **College:** The LNM Institute of Information Technology <br>

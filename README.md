@@ -7,7 +7,7 @@
 **LinkedIN Profile:** [Rishabh Agarwal](https://www.linkedin.com/in/rishabh-agarwal-ece/) <br>
 
 
---------------------------------------------------------------------------------------------------
+---
 
 <details>
 <summary><b>Task 1:</b> Compilation of C Program using GCC and RISC-V GCC Compiler</summary>
@@ -151,4 +151,4 @@ With `-Ofast`, the compiler applies maximum speed optimizations, reducing the in
  
 Through this task, the compilation flow of a C program was explored using both the native GCC compiler and the RISC-V cross compiler. The generated RISC-V assembly instructions were analyzed using `objdump`, providing insight into how high-level C code is translated into machine-level instructions for RISC-V architecture. A clear difference was observed between `-O1` (15 instructions in `main`) and `-Ofast` (12 instructions in `main`), demonstrating how compiler optimizations directly impact the generated instruction count.
 </details> 
-------------------------------------------------------------------------------------------------------------------
+---

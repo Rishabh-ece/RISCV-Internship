@@ -99,7 +99,7 @@ riscv64-unknown-elf-objdump -d sum_1ton.o
  
 The generated assembly output for the compiled program is shown below:
  
-![RISC-V Assembly Dump](Task1/objdump_assembly.png)
+![RISC-V Assembly Dump](Task1/assembly_riscv.png)
  
 ---
  
@@ -137,7 +137,7 @@ riscv64-unknown-elf-gcc -Ofast -mabi=lp64 -march=rv64i -o sum_1ton.o sum_1ton.c
  
 With `-Ofast`, the compiler applies maximum speed optimizations, reducing the instruction count in `main` to just **12 instructions** — fewer operations mean faster execution.
  
-![RISC-V Objdump Main Output - Ofast](Task1/main-Ofast.png)
+![RISC-V Objdump Main Output - Ofast](Task1/assembly-Ofast.png)
  
 ---
  

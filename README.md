@@ -1,5 +1,12 @@
 # RISCV-Internship
-## Task 3: Compilation of C Program using GCC and RISC-V GCC Compiler
+##  Basic Details
+
+**Name:** Rishabh Agarwal 
+**College:** The LNM Institute of Information Technology 
+**Email ID:** 24uec246@lnmiit.ac.in 
+**GitHub Profile:** [Rishabh-ece]((https://github.com/Rishabh-ece?tab=repositories))  
+**LinkedIN Profile:** [Rishabh Agarwal]((https://www.linkedin.com/in/rishabh-agarwal-ece/))
+## Task 1: Compilation of C Program using GCC and RISC-V GCC Compiler
 
 This task demonstrates how to compile a simple C program using both the native GCC compiler and the RISC-V GCC compiler. The objective is to understand the compilation flow and observe the generated RISC-V assembly instructions.
 
@@ -7,7 +14,7 @@ This task demonstrates how to compile a simple C program using both the native G
 
 # C Language Compilation using GCC
 
-Follow the steps below to compile and execute a C program in the Linux terminal.
+Follow the steps below to compile and execute a C program in the github cloud environment.
 
 ## Step 1: Create the C File
 
@@ -69,7 +76,7 @@ gcc sum_1ton.c
 
 The program output will be displayed on the terminal.
 
-![GCC Compilation Output](images/result_sum.png)
+![GCC Compilation Output](Task1/result_sum.png)
 
 ---
 

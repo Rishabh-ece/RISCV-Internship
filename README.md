@@ -71,7 +71,7 @@ Use the following command to display the program contents:
 cat sum_1ton.c
 ```
 
-![C Program using cat command](images/cat_sum1ton.c.png)
+![C Program using cat command](images/cat_sum1ton.png)
 
 ---
 

@@ -32,35 +32,12 @@ This command opens the text editor where the C program can be written.
 
 Write a program to calculate the sum of numbers from 1 to n.
 
-Example:
-
-```c
-#include <stdio.h>
-
-int main() {
-    int n = 10;
-    int sum = 0;
-
-    for(int i = 1; i <= n; i++) {
-        sum += i;
-    }
-
-    printf("Sum = %d\n", sum);
-
-    return 0;
-}
-```
+![C program](Task1/c_code.png)
 
 Save the file using:
 
 ```text
 Ctrl + S
-```
-
-Close the editor using:
-
-```text
-Ctrl + W
 ```
 
 ---
@@ -94,7 +71,7 @@ Use the following command to display the program contents:
 cat sum_1ton.c
 ```
 
-![C Program using cat command](images/c_code.png)
+![C Program using cat command](images/cat_sum1ton.c.png)
 
 ---
 

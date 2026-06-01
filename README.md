@@ -71,7 +71,7 @@ Use the following command to display the program contents:
 cat sum_1ton.c
 ```
 
-![C Program using cat command](images/cat_sum1ton.png)
+![C Program using cat command](Task1/cat_sum1ton.png)
 
 ---
 
@@ -95,8 +95,6 @@ Run the following command to disassemble the object file:
 riscv64-unknown-elf-objdump -d sum_1ton.o
 ```
 
-![RISC-V Objdump Output](images/assembly_riscv.png)
-
 The generated assembly instructions for the C program will now appear on the terminal.
 
 To directly jump to the `main` function section, type:
@@ -104,7 +102,7 @@ To directly jump to the `main` function section, type:
 ```bash
 /main
 ```
-
+![RISC-V Objdump Main Output](Task1/main-O1.png)
 ---
 
 # Explanation of Important Compiler Options

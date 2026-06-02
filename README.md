@@ -3,8 +3,8 @@
 **Name:** Rishabh Agarwal<br>
 **College:** The LNM Institute of Information Technology <br>
 **Email ID:** 24uec246@lnmiit.ac.in <br>
-**GitHub Profile:** [Rishabh-ece](https://github.com/Rishabh-ece?tab=repositories)  <br>
-**LinkedIN Profile:** [Rishabh Agarwal](https://www.linkedin.com/in/rishabh-agarwal-ece/) <br>
+**GitHub Profile:** [Rishabh-Github](https://github.com/Rishabh-ece?tab=repositories)  <br>
+**LinkedIN Profile:** [Rishabh-LinkedIn](https://www.linkedin.com/in/rishabh-agarwal-ece/) <br>
 
 
 ---

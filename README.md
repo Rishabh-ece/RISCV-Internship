@@ -331,33 +331,15 @@ addi sp,sp,-16
 
 It adds an immediate constant value to a register.
 
-Here:
-
-```assembly
-addi sp,sp,-16
-```
-
 reduces the stack pointer by 16 bytes to allocate stack space for the function.
 
----
+Before the stack pointer contained:  
 
-## Observe Stack Pointer Before Instruction
+0x000000007f7e9b50
 
-```bash
-reg 0 sp
-```
+After execution:
 
----
-
-## Observe Stack Pointer After Instruction Execution
-
-Press **Enter** to execute the instruction and again check:
-
-```bash
-reg 0 sp
-```
-
-The value decreases by `16`, showing stack allocation.
+0x000000007f7e9b40
 
 ---
 

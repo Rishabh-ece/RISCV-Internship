@@ -142,7 +142,7 @@ riscv64-unknown-elf-gcc -Ofast -mabi=lp64 -march=rv64i -o sum_1ton.o sum_1ton.c
  
 With `-Ofast`, the compiler applies maximum speed optimizations, reducing the instruction count in `main` to just **12 instructions** — fewer operations mean faster execution.
  
-![RISC-V Objdump Main Output - Ofast](Task1/assembly-Ofast.png)
+![RISC-V Objdump Main Output - Ofast](Task1/mian-ofast.png)
  
 ---
  
@@ -200,7 +200,7 @@ riscv64-unknown-elf-gcc -O1 -mabi=lp64 -march=rv64i -o sum1ton.o sum1ton.c
 riscv64-unknown-elf-objdump -d sum1ton.o | less
 ```
 
-![Assembly - O1](Task2/main_-O1.png)
+![Assembly - O1](Task2/main-O1.png)
 
 `-Ofast` reduces `main` from **15 → 12 instructions** by aggressively eliminating redundant operations.
 

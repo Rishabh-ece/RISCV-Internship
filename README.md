@@ -157,226 +157,114 @@ Through this task, the compilation flow of a C program was explored using both t
 <summary> <b>Task 2:</b> SPIKE Simulation and Debugging using RISC-V GCC</summary>
 <br>
 
-This task demonstrates execution and debugging of a C program using the RISC-V simulator **SPIKE**.  
-The objective of this task is to understand:
-
-- RISC-V program execution
-- Assembly generation using `-Ofast`
-- Instruction-level debugging
-- Register value tracing
-- Stack pointer modification during execution
+This task demonstrates execution and debugging of a RISC-V compiled C program using the **SPIKE** simulator. Both `-O1` and `-Ofast` optimization levels are explored and compared.
 
 ---
 
-# Step 1: Navigate to Working Directory
-
-Move into the RISC-V samples directory using the following commands:
+## Step 1: Compile and Run using GCC (Native)
 
 ```bash
-cd /workspaces/vsd-riscv2/
-cd samples
-````
+gcc sum1ton.c
+./a.out
+```
 
----
-
-# Step 2: Compile the Program using RISC-V GCC
-
-Compile the C program using aggressive optimization (`-Ofast`):
+Then compile using RISC-V GCC with `-Ofast` and simulate:
 
 ```bash
 riscv64-unknown-elf-gcc -Ofast -mabi=lp64 -march=rv64i -o sum1ton.o sum1ton.c
-```
-
-### Description
-
-* `-Ofast` enables high-level compiler optimizations for maximum execution speed.
-* `-march=rv64i` targets the 64-bit RISC-V integer instruction set.
-* `-mabi=lp64` specifies the 64-bit ABI.
-
----
-
-# Step 3: Execute the Program using SPIKE
-
-Run the compiled RISC-V object file using the SPIKE simulator:
-
-```bash
 spike pk sum1ton.o
 ```
 
-### Description
-
-* `spike` → RISC-V ISA simulator
-* `pk` → Proxy kernel used to run programs on SPIKE
-* `sum1ton.o` → Compiled RISC-V executable
-
-The output of the program is shown below:
+Both produce the same output, confirming correctness of the RISC-V binary.
 
 ![SPIKE Program Output](Task2/result_spike.png)
 
 ---
 
-# Step 4: Observe Assembly Code of `<main>`
+## Step 2: Assembly of `<main>` — `-Ofast` vs `-O1`
 
-Generate the assembly dump using:
+### `-Ofast` — 12 Instructions
 
 ```bash
-riscv64-unknown-elf-objdump -d sum1ton.o
+riscv64-unknown-elf-gcc -Ofast -mabi=lp64 -march=rv64i -o sum1ton.o sum1ton.c
+riscv64-unknown-elf-objdump -d sum1ton.o | less
+```
+Search `/main` to jump to the `<main>` function.
+
+![Assembly - Ofast](Task2/main-ofast.png)
+
+### `-O1` — 15 Instructions
+
+```bash
+riscv64-unknown-elf-gcc -O1 -mabi=lp64 -march=rv64i -o sum1ton.o sum1ton.c
+riscv64-unknown-elf-objdump -d sum1ton.o | less
 ```
 
-The assembly generated using `-Ofast` optimization contains only **12 instructions** inside the `<main>` function.
+![Assembly - O1](Task2/main_-O1.png)
 
-This reduction in instruction count improves execution performance.
-
-![Assembly Code of Main Function](Task2/main-ofast.png)
+`-Ofast` reduces `main` from **15 → 12 instructions** by aggressively eliminating redundant operations.
 
 ---
 
-# Step 5: Open Debug Mode in SPIKE
+## Step 3: Debugging with SPIKE (`-d` flag)
 
-To debug the program instruction-by-instruction, use:
+Open the interactive SPIKE debugger:
 
 ```bash
 spike -d pk sum1ton.o
 ```
 
-The `-d` option opens the interactive debug window of SPIKE.
-
 ---
 
-# Step 6: Move to the `<main>` Function
+### Debugging `-Ofast` build
 
-Inside the debug window, move execution directly to the address of `<main>`:
+Navigate to `<main>` at address `100b0`:
 
 ```bash
 until pc 0 100b0
 ```
 
-### Description
+| Command | Instruction | Register | Before | After |
+|---|---|---|---|---|
+| `reg 0 a2` | `lui a2, 0x1` | `a2` | `0x0000000000000000` | `0x0000000000001000` |
+| `reg 0 a0` | `lui a0, 0x21` | `a0` | — | `0x0000000000021000` |
+| `reg 0 sp` | `addi sp, sp, -16` | `sp` | `0x000000007f7e9b50` | `0x000000007f7e9b40` |
 
-* `until` → Runs the program until a condition is met
-* `pc` → Program Counter
-* `100b0` → Address of the `<main>` function
+![SPIKE Debug - Ofast](Task2/debugger.png)
 
 ---
 
-# Step 7: Observe Register `a2`
+### Debugging `-O1` build
 
-Check the value stored inside register `a2` before execution:
+Navigate to `<main>` at address `10184`:
 
 ```bash
-reg 0 a2
+until pc 0 10184
 ```
 
-After pressing **Enter**, the next instruction executes.
+| Command | Instruction | Register | Before | After |
+|---|---|---|---|---|
+| `reg 0 sp` | `addi sp, sp, -16` | `sp` | `0x000000007f7e9b50` | `0x000000007f7e9b40` |
+| `reg 0 a2` | `li a2, 45` | `a2` | — | `0x000000000000002d` |
+| `reg 0 a1` | `li a1, 9` | `a1` | — | `0x0000000000000009` |
 
-The first instruction executed is:
-
-```assembly
-lui a2,0x1
-```
-
-### What is `lui` Instruction?
-
-`lui` stands for **Load Upper Immediate**.
-
-It loads an immediate value into the upper 20 bits of the register.
-
-Example:
-
-```assembly
-lui a2,0x1
-```
-
-stores:
-
-```text
-0x0000000000001000
-```
-
-inside register `a2`.
+![SPIKE Debug - O1](Task2/debug_-O1.png)
 
 ---
 
-# Step 8: Observe Register `a0`
+## Key Observations
 
-Similarly, inspect register `a0`:
-
-```bash
-reg 0 a0
-```
-
-After stepping through the next instruction:
-
-```assembly
-lui a0,0x21
-```
-
-the register value changes accordingly.
-
-This demonstrates how immediate values are loaded into registers during execution.
+- **`lui` (Load Upper Immediate):** Loads a value into the upper 20 bits of a register. Used in `-Ofast` to build addresses/constants efficiently.
+- **`li` (Load Immediate):** Loads a full immediate value directly into a register. More common in `-O1`.
+- **`addi sp, sp, -16`:** Allocates 16 bytes of stack space by decrementing the stack pointer — seen in both builds.
+- The stack pointer changes identically in both builds: `0x7f7e9b50` → `0x7f7e9b40`.
 
 ---
 
-# Step 9: Observe Stack Pointer Modification
+## Conclusion
 
-The next important instruction is:
-
-```assembly
-addi sp,sp,-16
-```
-
-### What is `addi`?
-
-`addi` stands for **Add Immediate**.
-
-It adds an immediate constant value to a register.
-
-reduces the stack pointer by 16 bytes to allocate stack space for the function.
-
-Before the stack pointer contained:  
-
-0x000000007f7e9b50
-
-After execution:
-
-0x000000007f7e9b40
-
----
-
-# Complete SPIKE Debug Window
-
-The complete debugging session showing:
-
-* register inspection
-* instruction execution
-* stack pointer changes
-* program counter movement
-
-is shown below:
-
-![SPIKE Debug Window](Task2/debugger.png)
-
----
-
-# Key Learnings
-
-Through this task, the following concepts were explored:
-
-* RISC-V program execution using SPIKE
-* Assembly generation using `objdump`
-* Impact of compiler optimization (`-Ofast`)
-* Instruction-level debugging
-* Register value inspection
-* Stack pointer manipulation
-* Understanding of `lui` and `addi` instructions
-
----
-
-# Conclusion
-
-This task provided hands-on experience with RISC-V simulation and debugging workflows using SPIKE. By stepping through instructions manually and observing register-level changes, a deeper understanding of low-level program execution and processor architecture was achieved.
-
+This task provided hands-on experience with RISC-V simulation and instruction-level debugging using SPIKE. By comparing `-O1` and `-Ofast`, it was observed that aggressive optimization reduces the `main` function from 15 to 12 instructions by using more compact instruction sequences (e.g., `lui` instead of `li`). Register tracing confirmed how values are loaded and how the stack pointer is managed at the function entry — key concepts in understanding RISC-V calling conventions and processor execution flow.
 
 </details>
 
----
+----

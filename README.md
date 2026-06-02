@@ -150,11 +150,12 @@ With `-Ofast`, the compiler applies maximum speed optimizations, reducing the in
 # Conclusion
  
 Through this task, the compilation flow of a C program was explored using both the native GCC compiler and the RISC-V cross compiler. The generated RISC-V assembly instructions were analyzed using `objdump`, providing insight into how high-level C code is translated into machine-level instructions for RISC-V architecture. A clear difference was observed between `-O1` (15 instructions in `main`) and `-Ofast` (12 instructions in `main`), demonstrating how compiler optimizations directly impact the generated instruction count.
-</details> 
+</details>
+
 ---
 <details>
- ````md
-# Task 2: SPIKE Simulation and Debugging using RISC-V GCC
+<summary> <b>Task 2:</b> SPIKE Simulation and Debugging using RISC-V GCC</summary>
+<br>
 
 This task demonstrates execution and debugging of a C program using the RISC-V simulator **SPIKE**.  
 The objective of this task is to understand:
@@ -397,3 +398,5 @@ This task provided hands-on experience with RISC-V simulation and debugging work
 ```
 
 </details>
+
+---

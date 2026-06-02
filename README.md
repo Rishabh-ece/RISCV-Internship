@@ -376,8 +376,6 @@ Through this task, the following concepts were explored:
 
 This task provided hands-on experience with RISC-V simulation and debugging workflows using SPIKE. By stepping through instructions manually and observing register-level changes, a deeper understanding of low-level program execution and processor architecture was achieved.
 
-```
-```
 
 </details>
 

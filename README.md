@@ -254,9 +254,6 @@ This task provided hands-on experience with RISC-V simulation and instruction-le
   <summary><b>Task 2.2 :</b> Traffic Light Controller Simulation — RISC-V GCC & SPIKE</summary>
   <br>
 
-> **VSD RISC-V Internship | Revision Task 2**
-> Compiled with `-O1` and `-Ofast` | Simulated on SPIKE | Objdump Analysis Included
-
 ---
 
 ## 📋 About the Project
@@ -291,7 +288,7 @@ The source code was written using **gedit** text editor inside the codespace env
 gedit traffic_light.c
 ```
 
-![C Code in Gedit](screenshots/gedit_code.png)
+![C Code in Gedit](Task2/tl_gedit_code.png)
 
 ---
 
@@ -302,7 +299,7 @@ gcc traffic_light.c
 ./a.out
 ```
 
-![GCC Output](screenshots/result_gcc.png)
+![GCC Output](Task2/tl_result_gcc.png)
 
 ---
 
@@ -315,7 +312,7 @@ riscv64-unknown-elf-gcc -O1 -mabi=lp64 -march=rv64i -o traffic_light.o traffic_l
 ls -ltr traffic_light.o
 ```
 
-![Object File Created](screenshots/obj_file.png)
+![Object File Created](Task2/tl_obj_file.png)
 
 > The `ls -ltr` confirms the object file `traffic_light.o` was successfully created (168136 bytes).
 
@@ -327,7 +324,7 @@ ls -ltr traffic_light.o
 spike pk traffic_light.o
 ```
 
-![RISC-V SPIKE Output](screenshots/result_riscv.png)
+![RISC-V SPIKE Output](Task2/tl_result_riscv.png)
 
 > Output is **identical** to native GCC — confirming the RISC-V binary works correctly on SPIKE.
 
@@ -350,11 +347,11 @@ Search for main inside `less`:
 
 #### 🔷 Objdump with `-O1`
 
-![Objdump O1 - Start Address](screenshots/main_O1_1.png)
+![Objdump O1 - Start Address](Task2/tl_main-O1_1.png)
 
 From the screenshot above, `main` starts at address **`0x10184`**.
 
-![Objdump O1 - End Address & Count](screenshots/main_O1_2.png)
+![Objdump O1 - End Address & Count](Task2/tl_main-O1_2.png)
 
 `main` ends at **`0x102C8`**. Using the calculator shown:
 
@@ -372,11 +369,11 @@ Number of Instructions = (End Address − Start Address) / 4
 
 #### 🔶 Objdump with `-Ofast`
 
-![Objdump Ofast - Start Address](screenshots/main_ofast_1.png)
+![Objdump Ofast - Start Address](Task2/tl_main-ofast_1.png)
 
 `main` starts at address **`0x100B0`**.
 
-![Objdump Ofast - End Address & Count](screenshots/main_ofast_2.png)
+![Objdump Ofast - End Address & Count](Task2/tl_main-ofast_2.png)
 
 `main` ends at **`0x10214``. Using the calculator:
 
@@ -431,7 +428,7 @@ spike -d pk traffic_light.o
 (spike)                      # press Enter to step instruction by instruction
 ```
 
-![SPIKE Debug O1](screenshots/debug_O1.png)
+![SPIKE Debug O1](Task2/tl_debug_-O1.png)
 
 **Key instructions visible in `-O1` debug:**
 
@@ -454,7 +451,7 @@ spike -d pk traffic_light.o
 (spike)
 ```
 
-![SPIKE Debug Ofast](screenshots/debug_ofast.png)
+![SPIKE Debug Ofast](Task2/tl_debug_ofast.png)
 
 **Key differences in `-Ofast` debug:**
 
@@ -503,15 +500,6 @@ spike -d pk traffic_light.o
 5. `spike -d` is a powerful way to trace how C code maps to real hardware instructions.
 
 ---
-
-## 👤 Author
-
-**VSD RISC-V Internship**
-*Revision Task 2 — SPIKE Simulation with -O1 and -Ofast*
-
----
-
-*Environment: GitHub Codespaces | Toolchain: riscv64-unknown-elf-gcc | Simulator: SPIKE*
 </details>
 
 ----

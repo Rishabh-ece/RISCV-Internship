@@ -9,7 +9,7 @@
 ---
 
 <details>
-<summary><b>Task 1:</b> Compilation of C Program using GCC and RISC-V GCC Compiler</summary>
+<summary><b>Task 1 :</b> Compilation of C Program using GCC and RISC-V GCC Compiler</summary>
 <br>
 
 This task demonstrates how to compile a simple C program using both the native GCC compiler and the RISC-V GCC compiler. The objective is to understand the compilation flow and observe the generated RISC-V assembly instructions.
@@ -130,7 +130,7 @@ The comparison between `-O1` and `-Ofast` clearly illustrated the impact of comp
 ---
 
 <details>
-<summary><b>Task 2:</b> SPIKE Simulation and Debugging using RISC-V GCC</summary>
+<summary><b>Task 2.1 :</b> SPIKE Simulation and Debugging using RISC-V GCC</summary>
 <br>
 
 This task demonstrates execution and debugging of a RISC-V compiled C program using the **SPIKE** simulator. Both `-O1` and `-Ofast` optimization levels are explored and compared.
@@ -250,3 +250,268 @@ This task provided hands-on experience with RISC-V simulation and instruction-le
 </details>
 
 ---
+<details>
+  <summary><b>Task 2.2 :</b> Traffic Light Controller Simulation — RISC-V GCC & SPIKE</summary>
+  <br>
+
+> **VSD RISC-V Internship | Revision Task 2**
+> Compiled with `-O1` and `-Ofast` | Simulated on SPIKE | Objdump Analysis Included
+
+---
+
+## 📋 About the Project
+
+This project simulates a **2-road Traffic Light Controller** using a **Finite State Machine (FSM)** in C. It cycles through 4 states representing real-world traffic light logic.
+
+| State | Road A | Road B |
+|-------|--------|--------|
+| 0 | 🟢 Green | 🔴 Red |
+| 1 | 🟡 Yellow | 🔴 Red |
+| 2 | 🔴 Red | 🟢 Green |
+| 3 | 🔴 Red | 🟡 Yellow |
+
+---
+
+## 🛠️ Step-by-Step Workflow
+
+### Step 1 — Navigate to Working Directory
+
+```bash
+cd /workspaces/vsd-riscv2/
+cd samples
+```
+
+---
+
+### Step 2 — Write the C Program
+
+The source code was written using **gedit** text editor inside the codespace environment.
+
+```bash
+gedit traffic_light.c
+```
+
+![C Code in Gedit](screenshots/gedit_code.png)
+
+---
+
+### Step 3 — Compile and Run with Native GCC
+
+```bash
+gcc traffic_light.c
+./a.out
+```
+
+![GCC Output](screenshots/result_gcc.png)
+
+---
+
+### Step 4 — Compile with RISC-V GCC (Create Object File)
+
+The C code is cross-compiled for RISC-V architecture using the following command:
+
+```bash
+riscv64-unknown-elf-gcc -O1 -mabi=lp64 -march=rv64i -o traffic_light.o traffic_light.c
+ls -ltr traffic_light.o
+```
+
+![Object File Created](screenshots/obj_file.png)
+
+> The `ls -ltr` confirms the object file `traffic_light.o` was successfully created (168136 bytes).
+
+---
+
+### Step 5 — Run on SPIKE Simulator
+
+```bash
+spike pk traffic_light.o
+```
+
+![RISC-V SPIKE Output](screenshots/result_riscv.png)
+
+> Output is **identical** to native GCC — confirming the RISC-V binary works correctly on SPIKE.
+
+---
+
+### Step 6 — Objdump Analysis
+
+Disassemble the binary to see the RISC-V assembly instructions:
+
+```bash
+riscv64-unknown-elf-objdump -d traffic_light.o | less
+```
+
+Search for main inside `less`:
+```
+/main
+```
+
+---
+
+#### 🔷 Objdump with `-O1`
+
+![Objdump O1 - Start Address](screenshots/main_O1_1.png)
+
+From the screenshot above, `main` starts at address **`0x10184`**.
+
+![Objdump O1 - End Address & Count](screenshots/main_O1_2.png)
+
+`main` ends at **`0x102C8`**. Using the calculator shown:
+
+```
+Number of Instructions = (End Address − Start Address) / 4
+                       = (0x102C8 − 0x10184) / 4
+                       = 0x144 / 4
+                       = 324 / 4
+                       = 81 instructions
+```
+
+> Each RISC-V instruction = **4 bytes**, so we divide the byte difference by 4.
+
+---
+
+#### 🔶 Objdump with `-Ofast`
+
+![Objdump Ofast - Start Address](screenshots/main_ofast_1.png)
+
+`main` starts at address **`0x100B0`**.
+
+![Objdump Ofast - End Address & Count](screenshots/main_ofast_2.png)
+
+`main` ends at **`0x10214``. Using the calculator:
+
+```
+Number of Instructions = (0x10214 − 0x100B0) / 4
+                       = 0x164 / 4
+                       = 356 / 4
+                       = 89 instructions
+```
+
+---
+
+#### 📊 Comparison Table
+
+| Flag | Start Address | End Address | Instructions |
+|------|--------------|-------------|--------------|
+| `-O1` | `0x10184` | `0x102C8` | **81** |
+| `-Ofast` | `0x100B0` | `0x10214` | **89** |
+
+---
+
+#### ⚖️ Why does `-Ofast` have MORE instructions than `-O1`?
+
+| Property | `-O1` | `-Ofast` |
+|----------|-------|----------|
+| Code size | Smaller (81 instr.) | Larger (89 instr.) |
+| Execution speed | Moderate | Faster |
+| Loop handling | Keeps original loop | May unroll loops |
+| Stack allocated | 96 bytes | 112 bytes |
+
+**Reason:** `-Ofast` applies aggressive techniques like **loop unrolling** (writes loop iterations explicitly instead of branching) and **function inlining** (prepares arguments inline instead of calling). This adds more instructions but eliminates branch penalties — so it runs faster even with more code.
+
+> Analogy: `-O1` packs your bag normally. `-Ofast` unpacks and reorganizes everything for fastest access — uses more space but you grab things quicker.
+
+---
+
+### Step 7 — SPIKE Debug Mode
+
+SPIKE's `-d` flag lets you step through every RISC-V instruction one by one — like watching your C code run at the hardware level.
+
+```bash
+spike -d pk traffic_light.o
+```
+
+---
+
+#### 🔷 Debug with `-O1`
+
+```bash
+(spike) until pc 0 10184     # jump to start of main
+(spike) reg 0 sp             # check stack pointer value
+(spike)                      # press Enter to step instruction by instruction
+```
+
+![SPIKE Debug O1](screenshots/debug_O1.png)
+
+**Key instructions visible in `-O1` debug:**
+
+| Instruction | What it does |
+|-------------|-------------|
+| `addi sp, sp, -96` | Allocates 96 bytes on stack for local variables |
+| `sd ra, 88(sp)` | Saves return address — so main knows where to go back |
+| `sd s0, 80(sp)` | Saves registers that will be used inside the function |
+| `jal ra, <puts>` | Calls `puts`/`printf` to print the traffic light state |
+| `addiw s0, s0, 1` | Increments loop counter (`state++`) |
+| `j <main+0xb0>` | Jumps back to top of loop |
+
+---
+
+#### 🔶 Debug with `-Ofast`
+
+```bash
+(spike) until pc 0 100b0     # jump to start of main (-Ofast address)
+(spike) reg 0 sp
+(spike)
+```
+
+![SPIKE Debug Ofast](screenshots/debug_ofast.png)
+
+**Key differences in `-Ofast` debug:**
+
+| Instruction | What it does |
+|-------------|-------------|
+| `lui a0, 0x21` | Loads string address **before** stack setup (aggressive reordering) |
+| `addi sp, sp, -112` | Stack is **larger (112 bytes)** — more variables due to inlining |
+| `addi a0, a0, 912` | Combines address calculation in fewer steps |
+| `sd ra, 104(sp)` | Return address saved at higher offset (bigger stack frame) |
+
+> Notice `-Ofast` starts by loading the string address (`lui`) even **before** allocating the stack — this is the compiler reordering instructions to keep the CPU pipeline busy.
+
+---
+
+#### 🔄 Side-by-Side Debug Difference
+
+| | `-O1` | `-Ofast` |
+|-|-------|----------|
+| Main start address | `0x10184` | `0x100B0` |
+| First instruction | `addi sp, sp, -96` | `lui a0, 0x21` |
+| Stack size | 96 bytes | 112 bytes |
+| Style | Conservative, readable | Aggressive, reordered |
+
+---
+
+## 🧰 Tools Used
+
+| Tool | Purpose |
+|------|---------|
+| `gedit` | Writing C source code |
+| `gcc` | Native x86 compilation and testing |
+| `riscv64-unknown-elf-gcc` | Cross-compilation for RISC-V |
+| `spike` | RISC-V ISA simulator |
+| `pk` | Proxy kernel — minimal OS for SPIKE |
+| `objdump` | Disassemble binary to RISC-V assembly |
+| GitHub Codespaces | Cloud development environment |
+
+---
+
+## 📌 Key Learnings
+
+1. Same C code → **different assembly** depending on the optimization flag.
+2. `-Ofast` produces **more instructions** than `-O1` but runs **faster** due to loop unrolling and inlining.
+3. Every RISC-V instruction = **4 bytes** → instruction count = address difference / 4.
+4. The **function prologue** (`addi sp`, `sd ra`) and **epilogue** (`ld ra`, `ret`) are clearly visible in both objdump and debug.
+5. `spike -d` is a powerful way to trace how C code maps to real hardware instructions.
+
+---
+
+## 👤 Author
+
+**VSD RISC-V Internship**
+*Revision Task 2 — SPIKE Simulation with -O1 and -Ofast*
+
+---
+
+*Environment: GitHub Codespaces | Toolchain: riscv64-unknown-elf-gcc | Simulator: SPIKE*
+</details>
+
+----

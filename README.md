@@ -503,3 +503,392 @@ spike -d pk traffic_light.o
 </details>
 
 ----
+
+<details>
+<summary><b>Task 3 :</b> Environment Setup & RISC-V Reference Bring-Up</summary>
+<br>
+This task establishes the RISC-V + FPGA development environment and verifies the complete reference execution flow. It ensures the toolchain and simulation environment are properly configured before proceeding with FPGA and IP-level work.
+ 
+ 
+---
+ 
+## 🎯 Objective
+ 
+Successfully configure the development environment and validate the RISC-V reference flow by compiling and executing sample programs, then clone and build the VSDFPGA labs firmware.
+ 
+**This task focuses on:**
+- Toolchain verification and readiness
+- Understanding the RISC-V compilation and firmware flow
+- Running the VSDFPGA labs in simulation (without FPGA hardware)
+- Building a stable foundation for upcoming internship tasks
+---
+ 
+## 🖥️ Environment Used
+ 
+| Environment | Purpose |
+|---|---|
+| GitHub Codespace (`sturdy-doodle`) | Primary development — Steps 1, 2, 3 |
+| Oracle VirtualBox VM (Ubuntu) | Local setup verification — Step 4 |
+ 
+---
+ 
+## Step 1: Set Up GitHub Codespace
+ 
+The official **vsd-riscv2** repository was forked from [https://github.com/vsdip/vsd-riscv2](https://github.com/vsdip/vsd-riscv2) to my GitHub account and a Codespace was launched directly from the fork.
+ 
+The Codespace initialized and built successfully, providing a pre-configured Linux environment with all required RISC-V development tools already installed — including `riscv64-unknown-elf-gcc` and the Spike ISA simulator. No manual tool installation was needed.
+ 
+**Repository forked:** `Rishabh-ece/vsd-riscv2` | **Codespace name:** `sturdy-doodle`
+ 
+---
+ 
+## Step 2: Verify RISC-V Reference Flow
+ 
+### 2.1 — Confirm Toolchain Version
+ 
+The RISC-V cross-compiler version was verified to confirm the toolchain is correctly installed.
+ 
+```bash
+riscv64-unknown-elf-gcc --version
+```
+ 
+The output confirmed **SiFive GCC 8.3.0-2019.08.0**, proving the compiler is ready.
+ 
+![RISC-V Toolchain Version](Task3/riscv--version.png)
+ 
+---
+ 
+### 2.2 — Navigate to Samples Directory
+ 
+```bash
+cd /workspaces/vsd-riscv2
+cd samples
+ls -ltr
+```
+ 
+![Samples Directory Listing](Task3/workspace.png)
+ 
+---
+ 
+### 2.3 — Compile and Run the Reference Program
+ 
+The `sum1ton.c` program was compiled and executed two ways — native GCC first, then via the RISC-V cross-compiler and Spike simulator — to verify the full toolchain end-to-end.
+ 
+```bash
+# Native GCC
+gcc sum1ton.c
+./a.out
+ 
+# RISC-V cross-compilation + Spike simulation
+riscv64-unknown-elf-gcc -o sum1ton.o sum1ton.c
+spike pk sum1ton.o
+```
+ 
+Both produced identical output:
+ 
+```
+Sum from 1 to 9 is 45
+```
+ 
+This confirms the RISC-V binary is functionally correct and the toolchain is fully working.
+ 
+![RISC-V Reference Flow — sum1ton Execution](Task3/sum1ton.png)
+ 
+---
+ 
+## Step 3: Clone and Run VSDFPGA Labs
+ 
+### 3.1 — Clone the VSDFPGA Labs Repository
+ 
+Once the RISC-V reference flow was verified, the VSDFPGA Labs repository was cloned into the Codespace.
+ 
+```bash
+git clone https://github.com/vsdip/vsdfpga_labs
+cd vsdfpga_labs
+```
+ 
+ 
+![Cloning VSDFPGA Labs](Task3/fpga_cloning.png)
+ 
+---
+ 
+### 3.2 — Review the Firmware Source: `riscv_logo.c`
+ 
+The firmware source was inspected using `cat` to understand the program's structure before building it.
+ 
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+cat riscv_logo.c
+```
+
+![riscv_logo.c Source Code](Task3/cat_riscv_logo.png)
+ 
+---
+ 
+### 3.3 — Generate the BRAM Hex File
+ 
+The firmware was compiled to produce `riscv_logo.bram.hex` — the memory initialization file embedded into the FPGA's Block RAM (BRAM).
+ 
+```bash
+make riscv_logo.bram.hex
+```
+ 
+The `make` command drives the full pipeline:
+ 
+1. Cross-compiles `riscv_logo.c` → `riscv_logo.o` using `riscv64-unknown-elf-gcc`
+2. Assembles support files: `start.S`, `putchar.S`, `wait.S`, `perf.S`
+3. Links all objects using `bram.ld` → produces `riscv_logo.bram.elf`
+4. Runs `firmware_words` to convert the ELF binary → `riscv_logo.bram.hex`
+5. Copies the hex file into `../RTL/` for use in the FPGA build
+![BRAM Hex Generation — Command and Build Log](Task3/riscv_logo_bram.png)
+ 
+---
+ 
+### 3.4 — BRAM Hex Generation Output
+ 
+The build completed successfully with these key metrics:
+ 
+```
+RAM SIZE=6144
+Code size: 780 words ( total RAM size: 1536 words )
+Occupancy: 50%
+SAVE HEX: riscv_logo.bram.hex
+```
+ 
+The firmware uses exactly **50% of the available BRAM**, leaving headroom for future additions. The hex file was automatically placed in `RTL/firmware.hex` and `RTL/obj_dir/firmware.hex`.
+ 
+![BRAM Hex Generation — Full Output](Task3/riscv_logo_output.png)
+ 
+---
+ 
+## Step 4: Local Machine Preparation (Oracle VirtualBox VM)
+ 
+To prepare for future FPGA hardware tasks that require local execution, the development environment was replicated on an **Oracle VirtualBox VM** running Ubuntu. Both repositories were cloned locally, and the same build flow was verified.
+ 
+```bash
+ls ~
+# vsdfpga_labs  vsd-riscv2  VSDSquadron_FM  vsd_ss  ...
+```
+ 
+The home directory listing confirms both `vsdfpga_labs` and `vsd-riscv2` are present on the local machine alongside other project directories.
+ 
+![Local VM — Both Repos Confirmed](Task3/build_VM.png)
+ 
+---
+ 
+### 4.1 — Inspect Firmware Using Nano on VM
+ 
+Inside the VM, `riscv_logo.c` was opened with `nano` to inspect the firmware and verify the local environment is functional.
+ 
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+nano riscv_logo.c
+```
+ 
+The complete source was visible — `print_banner()`, delay loop, `clear_screen()`, and `main()` — confirming the file was cloned correctly.
+ 
+![Nano Editor — riscv_logo.c on VM](Task3/nano_riscv_logo_VM.png)
+ 
+---
+ 
+### 4.2 — Generate BRAM Hex Locally on VM
+ 
+The firmware was also built locally to verify the VM toolchain works correctly, independent of the Codespace.
+ 
+```bash
+make riscv_logo.bram.hex
+```
+ 
+The local build succeeded with **51% BRAM occupancy**, confirming the local environment is fully operational for future tasks.
+ 
+![BRAM Hex Generation on VM](Task3/bram_hex_VM.png)
+ 
+---
+ 
+## 🧠 Understanding Check — Mandatory Questions
+ 
+### Q1: Where is the RISC-V program located in the `vsd-riscv2` repository?
+ 
+The RISC-V reference program is located in the **`samples/`** directory of the `vsd-riscv2` repository. The primary file is `sum1ton.c`, which calculates the sum of integers from 1 to N. Supporting files include `load.S` (assembly bootloader), `1ton_custom.c` (a variant), and a `Makefile` for build automation.
+ 
+```
+vsd-riscv2/
+└── samples/
+    ├── sum1ton.c       ← Main reference program
+    ├── load.S          ← Assembly bootloader
+    ├── 1ton_custom.c   ← Custom variant
+    └── Makefile        ← Build script
+```
+ 
+---
+ 
+### Q2: How is the program compiled and loaded into memory?
+ 
+The process follows two steps:
+ 
+**Step 1 — Cross-Compilation:**
+```bash
+riscv64-unknown-elf-gcc -o sum1ton.o sum1ton.c
+```
+The C source is compiled by the RISC-V cross-compiler into a RISC-V binary (ELF format). This binary contains RISC-V machine instructions and cannot run on a native x86 PC — it needs a RISC-V processor or simulator.
+ 
+**Step 2 — Loading and Simulation via Spike + Proxy Kernel:**
+```bash
+spike pk sum1ton.o
+```
+- **Spike** is a software RISC-V CPU — it simulates the processor in its entirety.
+- **pk (Proxy Kernel)** is a minimal OS shim that loads the binary into simulated memory, sets up the execution environment, and handles system calls like `printf`.
+```
+sum1ton.c
+    │
+    ▼  riscv64-unknown-elf-gcc
+sum1ton.o  (RISC-V ELF binary)
+    │
+    ▼  spike + pk
+Simulated RISC-V Memory
+    │
+    ▼
+Execution → Output
+```
+ 
+---
+ 
+### Q3: How does the RISC-V core access memory and memory-mapped I/O?
+ 
+he RISC-V processor accesses both memory and hardware peripherals using normal load and store instructions.
+
+In a memory-mapped I/O system, devices such as UART, GPIO, or timers are assigned specific memory addresses. When the processor reads from or writes to those addresses, it communicates with the hardware instead of normal RAM.
+
+For example:
+
+Reading or writing to RAM accesses program or data memory.
+Writing to a UART address sends data to the serial port.
+
+This allows the processor to control hardware using ordinary memory operations.
+ 
+### Q4: Where would a new FPGA IP block logically integrate in this system?
+ 
+## Q4. Where would a new FPGA IP block logically integrate in this system?
+
+A new FPGA IP block would be connected to the **system bus** as a **memory-mapped peripheral**. It would be assigned a unique memory address, allowing the RISC-V processor to communicate with it using normal load (`lw`) and store (`sw`) instructions.
+
+For example, if a custom hardware module such as a traffic light controller or an AES encryption engine is mapped to address `0x30000000`, the processor can control it simply by reading from or writing to that address. No changes to the RISC-V core are required.
+
+This modular approach makes it easy to add new hardware accelerators or peripherals to the system while keeping the processor architecture unchanged.
+
+ 
+```
+RISC-V Core
+      │
+   System Bus / MMIO
+      │
+ ┌────┼──────────────────────────────┐
+ │    │                              │
+ ▼    ▼         ▼          ▼        ▼
+RAM  UART      GPIO       Timer   Custom FPGA IP ← New module
+                                  (e.g., 0x30000000)
+```
+ 
+This modular, address-mapped architecture is standard in SoC design — hardware accelerators and peripherals can be added without touching the processor or bus arbitration logic.
+ 
+---
+ 
+## 🔧 Optional Confidence Task — Customizing `riscv_logo.c`
+ 
+To demonstrate the complete edit → compile → run cycle, the `riscv_logo.c` firmware was modified to display a **custom personal banner** instead of the default VSDSquadron message.
+ 
+---
+ 
+### Before — Default Banner Output
+ 
+The unmodified firmware displays the standard VSDSquadron FPGA Mini banner.
+ 
+![Default Banner Output — Before Modification](Task3/ct-output1.png)
+ 
+---
+ 
+### Modification — Editing the Banner in Gedit
+ 
+The `print_banner()` function was edited using **gedit** on the VM to replace the default banner text with personal details:
+ 
+```bash
+gedit riscv_logo.c
+```
+ 
+The `printf` lines inside `print_banner()` were changed to:
+ 
+```c
+void print_banner() {
+    printf("********************************************************\n");
+    printf("*                                                      *\n");
+    printf("*        HI, MY NAME IS RISHABH AGARWAL               *\n");
+    printf("*                                                      *\n");
+    printf("*                    LNMIIT                           *\n");
+    printf("*                                                      *\n");
+    printf("*             RISCV FPGA INTERNSHIP                   *\n");
+    printf("*                                                      *\n");
+    printf("********************************************************\n\n");
+}
+```
+ 
+![Modified riscv_logo.c — Gedit](Task3/ct-gedit.png)
+ 
+---
+ 
+### After — Custom Banner Output
+ 
+After saving the changes, the firmware was recompiled and run:
+ 
+```bash
+make clean
+make riscv_logo.bram.hex
+```
+ 
+The output now shows the personalized banner, confirming that the edit → build → run cycle works correctly end-to-end.
+ 
+![Custom Banner Output — After Modification](Task3/ct-output-2.png)
+ 
+---
+ 
+## 📊 Results Summary
+ 
+| Task | Status |
+|---|---|
+| GitHub Codespace launched from forked `vsd-riscv2` | ✅ Complete |
+| RISC-V toolchain version confirmed | ✅ Complete |
+| `sum1ton.c` compiled and run via native GCC | ✅ Complete |
+| `sum1ton.c` compiled and run via Spike simulator | ✅ Complete |
+| `vsdfpga_labs` repository cloned successfully | ✅ Complete |
+| `riscv_logo.c` firmware reviewed and understood | ✅ Complete |
+| BRAM hex file generated (`make riscv_logo.bram.hex`) | ✅ Complete |
+| Local VM set up — both repos cloned and verified | ✅ Complete |
+| All four understanding check questions answered | ✅ Complete |
+| Optional confidence task — custom banner verified | ✅ Complete |
+| FPGA flashing | ⚠️ Skipped — board not connected |
+ 
+---
+ 
+## 🧰 Tools Used
+ 
+| Tool | Purpose |
+|------|---------|
+| GitHub Codespaces | Primary cloud development environment |
+| Oracle VirtualBox (Ubuntu) | Local machine setup and verification |
+| `riscv64-unknown-elf-gcc` | RISC-V cross-compilation |
+| `spike` | RISC-V ISA simulator |
+| `pk` | Proxy kernel — minimal OS for Spike |
+| `make` | Build automation for firmware and FPGA flow |
+| `nano` / `gedit` | Source file editing |
+| `cat` | Reviewing source files in terminal |
+ 
+---
+ 
+## 📌 Key Learnings
+ 
+1. A **GitHub Codespace** provides a fully pre-configured environment — no manual toolchain setup needed.
+2. The RISC-V firmware compilation pipeline goes: `C source → cross-compile → ELF → firmware_words → BRAM hex → FPGA`.
+3. **MMIO** is the standard way for RISC-V (and most embedded processors) to communicate with peripherals — no special I/O instructions needed.
+4. New FPGA IP blocks integrate at the **bus level** with a unique address range — the processor core stays unchanged.
+5. The full **edit → compile → run** cycle works identically in Codespace and on a local VM, confirming environment portability.
+</details>
+---

@@ -856,63 +856,7 @@ This modular, address-mapped architecture is standard in SoC design — hardware
  
 ---
  
-## 🔧 Optional Confidence Task — Customizing `riscv_logo.c`
- 
-To demonstrate the complete edit → compile → run cycle, the `riscv_logo.c` firmware was modified to display a **custom personal banner** instead of the default VSDSquadron message.
- 
----
- 
-### Before — Default Banner Output
- 
-The unmodified firmware displays the standard VSDSquadron FPGA Mini banner.
- 
-![Default Banner Output — Before Modification](Task3/ct-output1.png)
- 
----
- 
-### Modification — Editing the Banner in Gedit
- 
-The `print_banner()` function was edited using **gedit** on the VM to replace the default banner text with personal details:
- 
-```bash
-gedit riscv_logo.c
-```
- 
-The `printf` lines inside `print_banner()` were changed to:
- 
-```c
-void print_banner() {
-    printf("********************************************************\n");
-    printf("*                                                      *\n");
-    printf("*        HI, MY NAME IS RISHABH AGARWAL               *\n");
-    printf("*                                                      *\n");
-    printf("*                    LNMIIT                           *\n");
-    printf("*                                                      *\n");
-    printf("*             RISCV FPGA INTERNSHIP                   *\n");
-    printf("*                                                      *\n");
-    printf("********************************************************\n\n");
-}
-```
- 
-![Modified riscv_logo.c — Gedit](Task3/ct-gedit.png)
- 
----
- 
-### After — Custom Banner Output
- 
-After saving the changes, the firmware was recompiled and run:
- 
-```bash
-make clean
-make riscv_logo.bram.hex
-```
- 
-The output now shows the personalized banner, confirming that the edit → build → run cycle works correctly end-to-end.
- 
-![Custom Banner Output — After Modification](Task3/ct-output-2.png)
- 
----
- 
+
 ## 📊 Results Summary
  
 | Task | Status |
@@ -930,7 +874,6 @@ The output now shows the personalized banner, confirming that the edit → build
 | `sudo make flash` attempted | ⚠️ FPGA board not connected |
 | `make terminal` attempted | ⚠️ `/dev/ttyUSB0` not available (no FPGA connected) |
 | All four understanding check questions answered | ✅ Complete |
-| Optional confidence task — custom banner verified | ✅ Complete |
  
 ---
  

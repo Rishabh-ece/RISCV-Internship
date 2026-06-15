@@ -702,6 +702,71 @@ make riscv_logo.bram.hex
 The local build succeeded with **51% BRAM occupancy**, confirming the local environment is fully operational for future tasks.
  
 ![BRAM Hex Generation on VM](Task3/bram_hex_VM.png)
+
+## 4.3 — Build the FPGA Design on the Local VM
+
+After successfully generating `riscv_logo.bram.hex`, the FPGA RTL build flow was executed to verify that the local development environment was properly configured.
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+
+make clean
+make build
+```
+
+* `make clean` removes previously generated synthesis and implementation files.
+* `make build` starts the FPGA synthesis and place-and-route flow using **Yosys** and **nextpnr**.
+
+The synthesis process started successfully and generated the expected build logs, confirming that the FPGA development tools were correctly installed and functioning.
+
+After building the design, the following command was executed:
+
+```bash
+sudo make flash
+```
+
+This command is used to program the generated bitstream (`SOC.bin`) onto the FPGA board.
+
+Since no FPGA board was connected during this task, the flashing step could not be completed successfully.
+
+---
+
+![RTL Build on Virtual Machine](Task3/make_build.png)
+
+---
+
+
+
+
+
+## 4.4 — Open the Serial Terminal
+
+To communicate with the FPGA over UART, the following command was executed:
+
+```bash
+make terminal
+```
+
+This launches **picocom** and attempts to connect to the serial device `/dev/ttyUSB0`.
+
+![Serial Terminal Attempt on Virtual Machine](Task3/make_terminal.png)
+
+The command produced the following error:
+
+```text
+FATAL: cannot open /dev/ttyUSB0: No such file or directory
+```
+
+This happened because no physical FPGA board was connected to the Virtual Machine. The device `/dev/ttyUSB0` is created only when the FPGA board is attached through USB and recognized by the operating system.
+
+Therefore, hardware-dependent operations such as serial communication could not be performed in the absence of the FPGA board.
+
+---
+
+### Note
+
+The commands `make build`, `sudo make flash`, and `make terminal` are intended for FPGA hardware execution. While the synthesis flow could be started successfully, the flashing and terminal steps require a connected FPGA board and therefore could not be completed in this setup.
+
  
 ---
  
@@ -767,8 +832,6 @@ Writing to a UART address sends data to the serial port.
 This allows the processor to control hardware using ordinary memory operations.
  
 ### Q4: Where would a new FPGA IP block logically integrate in this system?
- 
-## Q4. Where would a new FPGA IP block logically integrate in this system?
 
 A new FPGA IP block would be connected to the **system bus** as a **memory-mapped peripheral**. It would be assigned a unique memory address, allowing the RISC-V processor to communicate with it using normal load (`lw`) and store (`sw`) instructions.
 
@@ -862,9 +925,12 @@ The output now shows the personalized banner, confirming that the edit → build
 | `riscv_logo.c` firmware reviewed and understood | ✅ Complete |
 | BRAM hex file generated (`make riscv_logo.bram.hex`) | ✅ Complete |
 | Local VM set up — both repos cloned and verified | ✅ Complete |
+| `make clean` executed on local VM | ✅ Complete |
+| `make build` synthesis flow started successfully | ✅ Complete |
+| `sudo make flash` attempted | ⚠️ FPGA board not connected |
+| `make terminal` attempted | ⚠️ `/dev/ttyUSB0` not available (no FPGA connected) |
 | All four understanding check questions answered | ✅ Complete |
 | Optional confidence task — custom banner verified | ✅ Complete |
-| FPGA flashing | ⚠️ Skipped — board not connected |
  
 ---
  
@@ -891,4 +957,5 @@ The output now shows the personalized banner, confirming that the edit → build
 4. New FPGA IP blocks integrate at the **bus level** with a unique address range — the processor core stays unchanged.
 5. The full **edit → compile → run** cycle works identically in Codespace and on a local VM, confirming environment portability.
 </details>
+
 ---

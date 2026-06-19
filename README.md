@@ -910,12 +910,9 @@ This modular, address-mapped architecture is standard in SoC design — hardware
 
 ## 🎯 Objective
 
-Design and integrate a **Simple GPIO Output IP** (write register with readback) into the existing RISC-V SoC, then validate it using a real C program running on the simulated RISC-V CPU.
+Design and integrate a **Simple GPIO Output IP** into the existing RISC-V SoC, then validate it using a real C program running on the simulated RISC-V CPU.
 
-**Why GPIO?**
-- Conceptually simple — one register, write it, read it back
-- Introduces all core IP concepts (address decoding, bus signals, register logic)
-- Mirrors the first IP most engineers build in industry
+**IP Specification:** One 32-bit register — writing updates the output signal, reading returns the last written value.
 
 ---
 
@@ -924,7 +921,6 @@ Design and integrate a **Simple GPIO Output IP** (write register with readback) 
 | Tool | Purpose |
 |---|---|
 | Oracle VirtualBox (Ubuntu) | Local development machine |
-| `gedit` | Source file editing |
 | `riscv64-unknown-elf-gcc` | RISC-V cross-compiler |
 | `iverilog` + `vvp` | Verilog simulation |
 | `gtkwave` | Waveform viewer |
@@ -937,7 +933,7 @@ Design and integrate a **Simple GPIO Output IP** (write register with readback) 
 
 ## Step 1: Understand the Existing SoC
 
-Before writing any code, the existing `riscv.v` was studied to understand the bus structure, address decoding, and how existing peripherals are implemented. This step is reading only — no coding yet.
+Before writing any code, `riscv.v` was studied to understand the bus structure, address decoding, and how existing peripherals are implemented.
 
 ### 1.1 — Locate `riscv.v`
 
@@ -947,136 +943,82 @@ ls
 gedit riscv.v
 ```
 
-![Locating riscv.v in the RTL directory](Task2/s1_locate_riscv.png)
-
-The RTL directory contains `riscv.v` — the main SoC file that includes the CPU, RAM, LEDs, UART, and all address decoding logic.
+![Locating riscv.v in the RTL directory](Task4/s1_locate_riscv.v.png)
 
 ---
 
 ### 1.2 — Study the SOC Module: Bus Signals and Address Decoding
 
-The `SOC` module starts at line 313 of `riscv.v`. It defines the chip's external pins and the internal bus that connects the CPU to all peripherals.
+The `SOC` module (line 313) connects the CPU to all peripherals through a shared bus. Every peripheral — LEDs, UART, and your new GPIO IP — uses the same bus wires: `mem_addr`, `mem_wdata`, `mem_wmask`, `mem_rdata`, and `mem_wstrb`.
 
-**The 5 key bus wires** — every peripheral uses these same signals:
-
-| Wire | Direction | Meaning |
-|---|---|---|
-| `mem_addr[31:0]` | CPU → Peripherals | Which address the CPU is accessing |
-| `mem_wdata[31:0]` | CPU → Peripherals | Data the CPU wants to write |
-| `mem_wmask[3:0]` | CPU → Peripherals | Which bytes in the write are valid |
-| `mem_rdata[31:0]` | Peripherals → CPU | Data returned to CPU on a read |
-| `mem_wstrb` | CPU → Peripherals | High when CPU is writing (`\|mem_wmask`) |
-
-**Address decoding** — how the SoC decides whether the CPU is talking to RAM or a peripheral:
+**How the SoC decides which peripheral to talk to:**
 
 ```verilog
-wire [29:0] mem_wordaddr = mem_addr[31:2]; // word address (byte addr >> 2)
-wire isIO  = mem_addr[22];  // if bit 22 is set → IO space (LEDs, UART, GPIO...)
-wire isRAM = !isIO;         // if bit 22 is clear → RAM
+wire isIO  = mem_addr[22];   // bit 22 = 1 → IO space (peripherals)
+wire isRAM = !isIO;          // bit 22 = 0 → RAM
+
+// Each peripheral gets its own bit number (1-hot addressing):
+localparam IO_LEDS_bit      = 0;
+localparam IO_UART_DAT_bit  = 1;
+localparam IO_UART_CNTL_bit = 2;
+// Your GPIO IP will use bit 3
 ```
 
-**1-hot IO addressing** — each peripheral gets its own unique bit number:
+So `mem_wordaddr[0]` high = LEDs selected. `mem_wordaddr[1]` = UART. GPIO gets **bit 3**.
 
-```verilog
-localparam IO_LEDS_bit      = 0;  // LEDs   → bit 0
-localparam IO_UART_DAT_bit  = 1;  // UART   → bit 1
-localparam IO_UART_CNTL_bit = 2;  // UART status → bit 2
-```
-
-This means `mem_wordaddr[0]` being high = CPU is talking to LEDs. `mem_wordaddr[1]` = UART. Your GPIO IP will use the next free slot: **bit 3**.
-
-![SOC Module — Bus Wires, CPU, RAM, Address Decoding](Task2/s1_soc_1.png)
+![SOC Module — Bus Wires, CPU, RAM, Address Decoding](Task4/s1_soc_1.png)
 
 ---
 
-### 1.3 — How Peripherals Work: Write Path + Read Path + BENCH Block
+### 1.3 — How Peripherals Work: Write + Read + Simulation Output
 
-**Write path (LED example):**
+**Write path** — same 3-condition pattern for every peripheral:
 ```verilog
 always @(posedge clk) begin
     if(isIO & mem_wstrb & mem_wordaddr[IO_LEDS_bit])
-        LEDS <= mem_wdata;
+        LEDS <= mem_wdata;   // update register when addressed + written
 end
 ```
-On every clock edge: if it's IO, and the CPU is writing, and bit 0 is selected → update the LED register. This 3-condition pattern is the same for every peripheral.
 
-**Read path (multiplexer):**
+**Read path** — a mux routes the right peripheral's data back to the CPU:
 ```verilog
 wire [31:0] IO_rdata =
     mem_wordaddr[IO_UART_CNTL_bit] ? {22'b0, !uart_ready, 9'b0} : 32'b0;
-
 assign mem_rdata = isRAM ? RAM_rdata : IO_rdata;
 ```
-A mux selects which peripheral's data gets returned to the CPU. Notice LEDs have no readback — your GPIO IP adds readback, making it more capable.
 
-**`` `ifdef BENCH `` block** — this is what makes simulation work without real hardware:
+**`` `ifdef BENCH `` block** — this makes `printf()` appear in the simulation terminal (no hardware needed):
 ```verilog
 `ifdef BENCH
   always @(posedge clk) begin
-    if(uart_valid)
-      $write("%c", mem_wdata[7:0]);  // print to terminal instead of real UART
+    if(uart_valid) $write("%c", mem_wdata[7:0]);
   end
 `endif
 ```
-When compiled with `-DBENCH`, every UART character is printed directly to your terminal — so `printf()` in your C program shows up in the simulation output.
 
-![SOC — IO Addressing, UART Instantiation, IO_rdata Mux, BENCH Block](Task2/s1_soc_2.png)
-
----
-
-### 1.4 — UART as a Peripheral Reference (`emitter_uart.v`)
-
-The UART module (`corescore_emitter_uart`) was studied as a reference for how a real peripheral module is structured — parameterized clock/baud rate, a valid/ready handshake, and fully synchronous logic. The GPIO IP follows this same standalone-module pattern.
-
-![emitter_uart.v — UART RTL Reference](Task2/s1_uart_rtl.png)
-
----
-
-### Step 1 Summary
-
-| What to find | Where it is | What it means |
-|---|---|---|
-| IO vs RAM selection | `wire isIO = mem_addr[22]` | Bit 22 of address decides routing |
-| Peripheral slot assignment | `localparam IO_X_bit = N` | Each peripheral gets one bit number |
-| CPU write to peripheral | `if(isIO & mem_wstrb & mem_wordaddr[bit])` | 3-condition check every clock |
-| CPU read from peripheral | `IO_rdata` mux on `mem_wordaddr[bit]` | Mux selects which peripheral responds |
+![SOC — IO Addressing, IO_rdata Mux, BENCH Block](Task4/s1_soc_2.png)
 
 ---
 
 ## Step 2: Write the GPIO IP RTL
 
-A new file `gpio_ip.v` was created — a self-contained Verilog module implementing the GPIO register.
+A new file `gpio_ip.v` was created — a standalone Verilog module implementing the GPIO register.
 
 ```bash
 gedit gpio_ip.v
 ```
 
-![gpio_ip.v — Complete RTL Module](Task2/s2_gpio_ip_rtl.png)
+![gpio_ip.v — Complete RTL Module](Task4/s2_gpio_ip_rtl.png)
 
-### What the module does
-
-**Ports:**
-```verilog
-module gpio_ip (
-    input  wire        clk,       // system clock
-    input  wire        resetn,    // active-low reset (matches SoC convention)
-    input  wire        sel,       // 1 = this IP is selected by address decoder
-    input  wire        wstrb,     // 1 = CPU is writing
-    input  wire [31:0] wdata,     // data from CPU
-    output reg  [31:0] rdata,     // data returned to CPU on read
-    output reg  [31:0] gpio_out   // the GPIO output register
-);
-```
-
-**Write logic — synchronous (runs on clock edge):**
+**Write logic — synchronous:**
 ```verilog
 always @(posedge clk) begin
-    if (!resetn)          gpio_out <= 32'b0;  // reset clears register
-    else if (sel & wstrb) gpio_out <= wdata;  // write updates register
+    if (!resetn)          gpio_out <= 32'b0;  // clear on reset
+    else if (sel & wstrb) gpio_out <= wdata;  // store CPU's value on write
 end
 ```
 
-**Readback logic — combinational (responds immediately):**
+**Readback logic — combinational:**
 ```verilog
 always @(*) begin
     if (sel)  rdata = gpio_out;  // return stored value when selected
@@ -1084,13 +1026,13 @@ always @(*) begin
 end
 ```
 
-**Design principle:** Correctness first, no optimizations. One register, write it, read it back — the exact same pattern every real hardware IP starts with.
+> One register, write it, read it back — correctness first, no optimizations. This is the exact pattern every real hardware IP starts with.
 
 ---
 
 ## Step 3: Integrate the GPIO IP into the SoC
 
-Four targeted changes were made to `riscv.v` to wire the GPIO IP into the system.
+Three targeted edits were made to `riscv.v`.
 
 ### 3.1 — Add the GPIO Address Bit
 
@@ -1098,43 +1040,32 @@ Four targeted changes were made to `riscv.v` to wire the GPIO IP into the system
 localparam IO_GPIO_bit = 3;  // new GPIO Output IP
 ```
 
-This gives GPIO the next free 1-hot slot (bit 3), following `IO_LEDS_bit=0`, `IO_UART_DAT_bit=1`, `IO_UART_CNTL_bit=2`.
-
-![localparam IO_GPIO_bit = 3 added to riscv.v](Task2/s3_local_param_gpio.png)
+![localparam IO_GPIO_bit = 3 added to riscv.v](Task4/s3_local_param_gpio.png)
 
 ---
 
 ### 3.2 — Declare GPIO Wires
 
 ```verilog
-//----------GPIO Signals---------------
 wire        gpio_sel   = isIO & mem_wordaddr[IO_GPIO_bit];
 wire        gpio_wstrb = mem_wstrb;
 wire [31:0] gpio_rdata;
 wire [31:0] gpio_out;
 ```
 
-- `gpio_sel` — goes high only when CPU addresses IO bit 3 (your IP's exclusive slot)
-- `gpio_wstrb` — forwards the bus write strobe
-- `gpio_rdata`, `gpio_out` — receive outputs from the IP
+`gpio_sel` goes high only when the CPU addresses IO bit 3 — your IP's exclusive slot.
 
-![GPIO wire declarations in riscv.v](Task2/s3_gpio_signals.png)
+![GPIO wire declarations in riscv.v](Task4/s3_gpio_signals.png)
 
 ---
 
 ### 3.3 — Instantiate IP and Update Readback Mux
 
-The `gpio_ip` module was instantiated after UART, and the `IO_rdata` mux was extended to include the GPIO readback path:
-
 ```verilog
 gpio_ip GPIO (
-    .clk     (clk),
-    .resetn  (resetn),
-    .sel     (gpio_sel),
-    .wstrb   (gpio_wstrb),
-    .wdata   (mem_wdata),
-    .rdata   (gpio_rdata),
-    .gpio_out(gpio_out)
+    .clk(clk), .resetn(resetn), .sel(gpio_sel),
+    .wstrb(gpio_wstrb), .wdata(mem_wdata),
+    .rdata(gpio_rdata), .gpio_out(gpio_out)
 );
 
 wire [31:0] IO_rdata =
@@ -1143,20 +1074,9 @@ wire [31:0] IO_rdata =
                                                32'b0;
 ```
 
-The `IO_rdata` mux update is critical — without it, reads from the GPIO address always return `0`, breaking the readback requirement.
+The `IO_rdata` mux update is critical — without it, reads always return `0`.
 
-![GPIO Instantiation + IO_rdata Mux Extended](Task2/s3_declare_gpio.png)
-
----
-
-### Step 3 Checklist
-
-| Requirement | Done | Evidence |
-|---|---|---|
-| Instantiate IP in SoC top-level | ✅ | `gpio_ip GPIO(...)` in `riscv.v` |
-| Add address decoding | ✅ | `IO_GPIO_bit = 3`, `gpio_sel` wire |
-| Connect bus signals | ✅ | `mem_wdata`, `mem_wstrb`, `gpio_rdata` all wired |
-| Expose output signal (internally) | ✅ | `gpio_out` wire — visible in GTKWave |
+![GPIO Instantiation + IO_rdata Mux Extended](Task4/s3_declare_gpio.png)
 
 ---
 
@@ -1164,221 +1084,157 @@ The `IO_rdata` mux update is critical — without it, reads from the GPIO addres
 
 ### 4.1 — GPIO Address Calculation
 
-The `io.h` header in the Firmware folder defines how IO addresses are structured:
-
 ```bash
 cat io.h
 ```
 
-![io.h — IO_BASE and peripheral offsets](Task2/s4_cat_io_h.png)
+![io.h — IO_BASE and peripheral offsets](Task4/s4_cat_io.h.png)
 
-**Pattern:** `byte_offset = (1 << bit_number) << 2`
+The existing pattern: `byte_offset = (1 << bit_number) << 2`
 
-Existing offsets: `IO_LEDS=4` (bit 0), `IO_UART_DAT=8` (bit 1), `IO_UART_CNTL=16` (bit 2).
-
-For GPIO (bit 3): `(1 << 3) << 2 = 32`
-
-**GPIO address = `IO_BASE + 32` = `0x400000 + 0x20` = `0x400020`**
+For GPIO (bit 3): `(1 << 3) << 2 = 32` → **GPIO address = `0x400000 + 32 = 0x400020`**
 
 In code: `#define IO_GPIO 32`
 
 ---
 
-### 4.2 — The C Test Program (`gpio_test.c`)
+### 4.2 — Write the C Test Program
 
 ```bash
 gedit gpio_test.c
 ```
 
-![gpio_test.c — Firmware Test Program](Task2/s4_gpio_test.png)
+![gpio_test.c — Firmware Test Program](Task4/s4_gpio_test.png)
 
-The program uses the existing `IO_OUT` / `IO_IN` macros from `io.h` to write three test values and immediately read them back — printing results through UART `printf`.
+Writes three test values to the GPIO register via `IO_OUT` and reads them back via `IO_IN`, printing results through UART `printf`.
 
 ---
 
 ### 4.3 — Compile the Firmware
-
-The Firmware `Makefile` automates the full bare-metal RISC-V compilation pipeline:
-
-![Firmware Makefile — full RISC-V build pipeline](Task2/s4_makefile_firmware.png)
 
 ```bash
 cd ~/vsdfpga_labs/basicRISCV/Firmware
 make gpio_test.bram.hex
 ```
 
-![make gpio_test.bram.hex — successful build](Task2/s4_gpio_test_bram.png)
+The Firmware Makefile handles the full RISC-V bare-metal pipeline: compile → assemble → link → convert to hex → copy to `../RTL/firmware.hex`.
 
-**Result:** Build succeeded with **45% BRAM occupancy**. The hex file was automatically copied to `../RTL/firmware.hex` — the file `riscv.v` reads at simulation start:
+![Firmware Makefile](Task4/s4_makefile_firmware.png)
 
-```bash
-grep -n "firmware.hex\|readmemh" riscv.v
-# → $readmemh("firmware.hex", MEM);
-```
+![make gpio_test.bram.hex — 45% occupancy, auto-copied to RTL/](Task4/s4_gpio_test_bram.png)
 
-![grep confirms firmware.hex is loaded into BRAM](Task2/s4_grep_readmemh.png)
+`riscv.v` loads this hex file into BRAM at simulation start via `$readmemh("firmware.hex", MEM)`:
 
-The RTL `Makefile` handles FPGA synthesis and flashing for real hardware (not used in simulation):
-
-![RTL Makefile — build/flash targets for hardware](Task2/s4_rtlmakefile.png)
+![grep confirms firmware.hex loads into MEM](Task4/s4_grep_readmemh.png)
 
 ---
 
 ### 4.4 — The Simulation Testbench (`bench.v`)
 
-**Why we need a testbench:** `riscv.v` uses two iCE40 FPGA hardware primitives that `iverilog` cannot simulate — `SB_HFOSC` (the internal oscillator) and `SB_PLL40_CORE` (the PLL). These must be replaced with simple software models for simulation.
+`riscv.v` uses two iCE40 hardware primitives that `iverilog` cannot simulate — `SB_HFOSC` (oscillator) and `SB_PLL40_CORE` (PLL). These need to be replaced with simple stub models.
 
-**How the clock works in this SoC** (confirmed by grep):
+The clock chain was confirmed first:
 
-![grep shows SB_HFOSC drives clk_int, which feeds Clockworks](Task2/s4_grep_assignclk.png)
+![grep shows SB_HFOSC → clk_int → Clockworks → clk/resetn](Task4/s4_grep_assignclk.png)
 
-`SB_HFOSC` → `clk_int` → `Clockworks` module → `clk` + `resetn` (used everywhere in design)
+`SB_HFOSC` generates `clk_int` → `Clockworks` divides it → produces `clk` and `resetn` used everywhere.
 
-**What `bench.v` contains** — three parts:
+`bench.v` contains three parts:
 
 ```bash
 cat bench.v
 ```
 
-![bench.v — Full Testbench](Task2/s4_bench.png)
+![bench.v — Stubs + Testbench Module](Task4/s4_bench.png)
 
-**Part 1 — `SB_HFOSC` stub** (replaces hardware oscillator):
-```verilog
-module SB_HFOSC (...);
-    parameter CLKHF_DIV = "0b00";
-    reg clk_gen = 0;
-    always #20 clk_gen = ~clk_gen;  // generates a toggling clock
-    assign CLKHF = clk_gen;
-endmodule
-```
-
-**Part 2 — `SB_PLL40_CORE` stub** (replaces hardware PLL):
-```verilog
-module SB_PLL40_CORE (...);
-    // all required parameters declared
-    assign PLLOUTCORE = REFERENCECLK;  // just passes clock through
-endmodule
-```
-
-**Part 3 — `bench` module** (the actual testbench):
-```verilog
-module bench;
-    SOC uut (.RESET(RESET), .LEDS(LEDS), .RXD(RXD), .TXD(TXD));
-    initial begin
-        $dumpfile("gpio_sim.vcd");  // for GTKWave
-        $dumpvars(0, bench);
-        RESET = 1; #100; RESET = 0;
-        #200000000;                 // run long enough for CPU to execute
-        $finish;
-    end
-endmodule
-```
-
-> **In simple terms:** The stubs pretend to be the FPGA's oscillator and PLL (since simulation can't use real hardware chips). The bench module powers up the whole SoC, releases reset, and waits for the CPU to run your test program.
+- **`SB_HFOSC` stub** — a register that toggles every 20ns, pretending to be the oscillator
+- **`SB_PLL40_CORE` stub** — passes the clock straight through, pretending to be the PLL
+- **`bench` module** — instantiates the full `SOC`, releases `RESET` after 100ns, runs for 200ms of simulation time, dumps signals to `gpio_sim.vcd` for GTKWave
 
 ---
 
-### 4.5 — Compile and Run the Simulation
+### 4.5 — Run the Simulation
 
 ```bash
-cd ~/vsdfpga_labs/basicRISCV/RTL
 iverilog -g2012 -DBENCH -o gpio_sim riscv.v bench.v
 vvp gpio_sim
 ```
 
-- `-DBENCH` activates the `$write` UART block inside `riscv.v` so `printf` output appears in the terminal
-- `riscv.v` has `` `include "gpio_ip.v" `` internally, so `gpio_ip.v` does not need to be listed separately
+(`gpio_ip.v` doesn't need to be listed separately — `riscv.v` already includes it internally via `` `include ``.)
 
-![Simulation compile + run — complete output](Task2/s4_iverilog_output.png)
+![Simulation output — all three values read back correctly](Task4/s4_iverilog_output.png)
 
-**Simulation output:**
 ```
 GPIO write 0xDEADBEEF -> readback: 0xDEADBEEF
 GPIO write 0x00000001 -> readback: 0x00000001
 GPIO write 0xFFFFFFFF -> readback: 0xFFFFFFFF
-riscv.v:287: $finish called at 79260340000 (1ps)
+$finish called at 79260340000 (1ps)
 ```
-
-All three values read back correctly. The RISC-V CPU wrote to the GPIO register through the real bus, and the readback returned the exact value written — proving both the write path and readback path work end-to-end.
 
 ---
 
-### 4.6 — GTKWave Waveform Verification
+### 4.6 — GTKWave Waveform
 
 ```bash
 gtkwave gpio_sim.vcd
 ```
 
-![GTKWave — GPIO IP signals during simulation](Task2/s4_gtkwave.png)
+![GTKWave — GPIO IP signals](Task4/s4_gtkwave.png)
 
-**What the waveform shows:**
-
-| Signal | Observation | What it proves |
+| Signal | What it shows | Proof |
 |---|---|---|
-| `clk` | Continuously toggling | ✅ Clock running correctly |
-| `resetn` | Transitions 0 → 1 | ✅ CPU released from reset, starts executing |
-| `sel` | Pulses high at each GPIO access | ✅ Address decoder correctly selecting GPIO IP |
-| `wstrb` | Pulses high during writes | ✅ CPU performing write operations |
-| `wdata[31:0]` | Shows `DEADBEEF` | ✅ Correct test value sent by CPU |
-| `gpio_out[31:0]` | Updates to `DEADBEEF` | ✅ Register storing the written value |
-| `rdata[31:0]` | Reflects `DEADBEEF` | ✅ Readback returning correct value |
-
-The moment at ~2623 µs shows `wdata = DEADBEEF`, `sel` high, `wstrb` high → `gpio_out` immediately updates to `DEADBEEF` → `rdata` reflects it. This is the GPIO IP being written to and read back by the real RISC-V CPU through the real bus — exactly what the task requires.
+| `clk` | Continuously toggling | ✅ Clock running |
+| `resetn` | 0 → 1 transition | ✅ CPU starts executing |
+| `sel` | Pulses at each GPIO access | ✅ Address decoding correct |
+| `wstrb` | Pulses during writes | ✅ Write path active |
+| `wdata[31:0]` | Shows `DEADBEEF` | ✅ Correct value from CPU |
+| `gpio_out[31:0]` | Updates to `DEADBEEF` | ✅ Register stores value |
+| `rdata[31:0]` | Reflects `DEADBEEF` | ✅ Readback correct |
 
 ---
 
 ## 📋 Submission Answers
 
 ### Address Used
-**`0x400020`**
+**`0x400020`** — `IO_BASE (0x400000)` + offset `32 (0x20)`
 
-Calculated as: `IO_BASE (0x400000) + IO_GPIO offset (32 = 0x20)`
-
-Where: `IO_GPIO offset = (1 << IO_GPIO_bit) << 2 = (1 << 3) << 2 = 32`
+Offset = `(1 << IO_GPIO_bit) << 2 = (1 << 3) << 2 = 32`
 
 ### How the CPU Accesses the IP
 
 ```
-CPU executes: store word, address 0x400020
-    ↓
-mem_addr[22] = 1         → isIO = 1 (IO space)
-mem_wordaddr[3] = 1      → gpio_sel = 1 (GPIO IP selected)
-    ↓
-gpio_ip receives: sel=1, wstrb=1, wdata=<value>
-    ↓
-gpio_out register updated on next clock edge
+CPU writes to 0x400020
+  → mem_addr[22]=1       → isIO=1
+  → mem_wordaddr[3]=1    → gpio_sel=1 (GPIO IP selected)
+  → gpio_ip stores wdata in gpio_out on next clock edge
 
-CPU executes: load word, address 0x400020
-    ↓
-gpio_sel = 1             → gpio_rdata = gpio_out
-    ↓
-IO_rdata mux selects gpio_rdata
-    ↓
-mem_rdata = gpio_rdata   → CPU receives the stored value
+CPU reads from 0x400020
+  → gpio_sel=1           → gpio_rdata = gpio_out
+  → IO_rdata mux selects gpio_rdata
+  → CPU receives the stored value
 ```
 
-### What Was Validated in Simulation
+### What Was Validated
 
-- ✅ Writing `0xDEADBEEF` → reading back `0xDEADBEEF` (all 32 bits correct)
-- ✅ Writing `0x00000001` → reading back `0x00000001` (single bit correct)
-- ✅ Writing `0xFFFFFFFF` → reading back `0xFFFFFFFF` (all bits set correct)
-- ✅ `sel` signal pulses correctly in waveform — address decoding works
-- ✅ `gpio_out` updates immediately after write — register logic works
-- ✅ CPU program completed normally — no hangs, no crashes
+- ✅ `0xDEADBEEF` written → read back correctly
+- ✅ `0x00000001` written → read back correctly
+- ✅ `0xFFFFFFFF` written → read back correctly
+- ✅ `sel` pulses in waveform — address decoder working
+- ✅ `gpio_out` updates after write — register logic working
+- ✅ Program completed normally — no hangs or errors
 
 ---
 
 ## 📊 Results Summary
 
-| Step | Requirement | Status |
-|---|---|---|
-| Step 1 | Understand SoC — bus, address decoding, existing peripherals | ✅ Done |
-| Step 2 | Write `gpio_ip.v` — register storage, write logic, readback | ✅ Done |
-| Step 3 | Integrate into `riscv.v` — localparam, wires, instantiation, mux | ✅ Done |
-| Step 4 | C test program compiled and run on simulated RISC-V CPU | ✅ Done |
-| Step 4 | Correct readback confirmed via UART terminal output | ✅ Done |
-| Step 4 | GTKWave waveform showing all GPIO signals | ✅ Done |
-| Step 5 | Hardware validation on FPGA board | ⚠️ Skipped — board not available |
+| Step | Status |
+|---|---|
+| Step 1: Understand SoC — bus, address decoding, peripherals | ✅ Done |
+| Step 2: Write `gpio_ip.v` — register, write logic, readback | ✅ Done |
+| Step 3: Integrate into `riscv.v` | ✅ Done |
+| Step 4: Simulate with C test program — correct readback via UART | ✅ Done |
+| Step 4: GTKWave waveform | ✅ Done |
+| Step 5: Hardware validation (FPGA board) | ⚠️ Skipped — board not available |
 
 ---
 
@@ -1387,16 +1243,11 @@ mem_rdata = gpio_rdata   → CPU receives the stored value
 | File | Location | Change |
 |---|---|---|
 | `gpio_ip.v` | `RTL/` | **New** — GPIO IP RTL module |
-| `riscv.v` | `RTL/` | Modified — `IO_GPIO_bit`, GPIO wires, instantiation, mux update |
+| `riscv.v` | `RTL/` | Modified — `IO_GPIO_bit`, wires, instantiation, mux |
 | `gpio_test.c` | `Firmware/` | **New** — C test program |
-| `bench.v` | `RTL/` | **New** — simulation testbench with hardware primitive stubs |
+| `bench.v` | `RTL/` | **New** — testbench with hardware primitive stubs |
 
 ---
-
-## Author
-
-**Rishabh Agarwal**
-LNMIIT | RISC-V FPGA Internship — Task 2
 
 </details>
 

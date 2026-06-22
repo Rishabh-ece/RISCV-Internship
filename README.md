@@ -903,7 +903,7 @@ This modular, address-mapped architecture is standard in SoC design — hardware
 
 ---
 <details>
-<summary><b>Task-4:</b> Design & Integrate a Simple GPIO Output IP (Memory-Mapped IP) </summary>
+<summary><b>Task 4:</b> Design & Integrate a Simple GPIO Output IP (Memory-Mapped IP) </summary>
 <br>
 
 ---
@@ -1252,3 +1252,353 @@ CPU reads from 0x400020
 </details>
 
 ----
+
+<details>
+<summary><b>Task 5:</b> Design a Multi-Register GPIO IP with Software Control (Direction + Data + Readback)</summary>
+<br>
+
+---
+
+## 🎯 Objective
+
+Extend the simple single-register GPIO IP from Task-4 into a **realistic, multi-register, software-controlled peripheral** — the kind that exists in every production SoC.
+
+This task focuses on:
+- Designing a proper **register map** with address offset decoding
+- Handling **multiple registers** inside one IP module
+- Deepening understanding of **memory-mapped I/O**
+- Validating end-to-end control: **software → register → signal**
+
+**IP Name:** GPIO Control IP (Direction + Data + Readback)
+
+---
+
+## 🗺️ Register Map
+
+| Offset | Register Name | Description |
+|--------|--------------|-------------|
+| `0x00` | `GPIO_DATA`  | GPIO output data register — write updates output, read returns last written value |
+| `0x04` | `GPIO_DIR`   | Direction register — `1` = output enabled, `0` = input mode |
+| `0x08` | `GPIO_READ`  | Readback register — returns `GPIO_DATA & GPIO_DIR` (active output pins only) |
+
+**Base Address:** `0x400020` (same as Task-4, `IO_BASE 0x400000` + offset `32`)
+
+**Address offsets are carried by `mem_addr[3:2]`** → this 2-bit field selects which register inside the IP is being accessed.
+
+---
+
+## 🖥️ Environment
+
+| Tool | Purpose |
+|------|---------|
+| Oracle VirtualBox (Ubuntu) | Local development machine |
+| `gedit` | RTL and firmware editing |
+| `riscv64-unknown-elf-gcc` | RISC-V cross-compiler |
+| `iverilog` + `vvp` | Verilog simulation |
+| `gtkwave` | Waveform viewer |
+| EDA Playground | Quick RTL verification before VM integration |
+
+**Working directories:**
+- RTL: `~/vsdfpga_labs/basicRISCV/RTL/`
+- Firmware: `~/vsdfpga_labs/basicRISCV/Firmware/`
+
+---
+
+## Step 1: Study the Existing GPIO IP (Task-4)
+
+Before writing any new code, the Task-4 `gpio_ip.v` was reviewed to understand what needs to be extended.
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+ls
+cat gpio_ip.v
+```
+
+![Task-4 gpio_ip.v — single register RTL](Task5/s1_gpio_oldrtl.png)
+
+**What Task-4 had:**
+- One 32-bit register (`gpio_out`)
+- Single write path: `sel & wstrb` → update register
+- Single read path: `sel` → return `gpio_out`
+- No concept of register selection — every access hits the same register
+
+**What needs to change for Task-5:**
+- Add **3 registers**: `gpio_data`, `gpio_dir`, `gpio_read`
+- Add **`offset[1:0]` input** to select which register is being accessed
+- Add **address offset decoding** in both write and read paths
+- `gpio_read` is **read-only** (combinational: `gpio_data & gpio_dir`)
+
+---
+
+## Step 2: Implement Multi-Register RTL
+
+### 2.1 — Write the New `gpio_ip.v`
+
+The GPIO IP was extended with a new port (`offset[1:0]`), two writable registers (`gpio_data`, `gpio_dir`), and a combinational readback register (`gpio_read`).
+
+```bash
+gedit gpio_ip.v
+```
+
+![Updated gpio_ip.v — multi-register RTL](Task5/s2_gpio_newrtl.png)
+
+
+**Key design decisions:**
+- `offset == 2'b00` → `GPIO_DATA` (byte offset `0x00`)
+- `offset == 2'b01` → `GPIO_DIR` (byte offset `0x04`, word offset `0x01`)
+- `offset == 2'b10` → `GPIO_READ` (byte offset `0x08`, word offset `0x02`)
+- `GPIO_READ` write is silently ignored — no `else` branch in the write block
+- `gpio_read` is a `wire` (not a `reg`) — it's purely combinational
+
+---
+
+### 2.2 — Verify on EDA Playground (Before VM Integration)
+
+The new RTL was verified on **EDA Playground** using a testbench with 5 targeted tests before touching the actual SoC.
+
+![EDA Playground — testbench.sv + design.sv](Task5/s2_gpio_eda.png)
+
+**Tests run:**
+1. Write `0xFFFFFFFF` to `GPIO_DIR` → readback `GPIO_DIR`
+2. Write `0xDEADBEEF` to `GPIO_DATA` → readback `GPIO_DATA`
+3. Read `GPIO_READ` → expect `0xDEADBEEF` (all bits output-enabled)
+4. Write `0x000000FF` to `GPIO_DIR` (partial) → readback `GPIO_DIR`
+5. Read `GPIO_READ` → expect `0x000000EF` (`DEADBEEF & 000000FF`)
+
+**EDA Playground EPWave waveform:**
+
+![EPWave — all 5 tests passing](Task5/s2_gpio_gtk_eda.png)
+
+All 5 tests passed. The `gpio_read` signal correctly masks `gpio_data` with `gpio_dir` at each step.
+
+---
+
+## Step 3: Integrate the Updated IP into the SoC
+
+Two targeted edits were made to `riscv.v`.
+
+### 3.1 — Declare GPIO Wires (Updated for New Ports)
+
+```verilog
+//---------GPIO Signals---------------
+wire        gpio_sel    = isIO & mem_wordaddr[IO_GPIO_bit];
+wire        gpio_wstrb  = mem_wstrb;
+wire [1:0]  gpio_offset = mem_addr[3:2];   // ← NEW: carries register offset
+wire [31:0] gpio_rdata;
+wire [31:0] gpio_data;
+wire [31:0] gpio_dir;
+wire [31:0] gpio_read;
+```
+
+![Updated GPIO wire declarations in riscv.v](Task5/s3_gpio_signals.png)
+
+`mem_addr[3:2]` is a 2-bit field that sits above the word-align bits. When the CPU accesses `0x400020` (offset 0), it becomes `2'b00`; `0x400024` becomes `2'b01`; `0x400028` becomes `2'b10`.
+
+---
+
+### 3.2 — Update Instantiation with New Ports
+
+```verilog
+gpio_ip GPIO (
+    .clk      (clk),
+    .resetn   (resetn),
+    .sel      (gpio_sel),
+    .wstrb    (gpio_wstrb),
+    .offset   (gpio_offset),    // ← NEW
+    .wdata    (mem_wdata),
+    .rdata    (gpio_rdata),
+    .gpio_data(gpio_data),      // ← NEW
+    .gpio_dir (gpio_dir),       // ← NEW
+    .gpio_read(gpio_read)       // ← NEW (replaces gpio_out)
+);
+```
+
+![Updated GPIO instantiation in riscv.v](Task5/s3_gpio_declare.png)
+
+> The `IO_rdata` mux does **not** need to change — offset decoding happens entirely inside `gpio_ip.v`. The mux still just checks `mem_wordaddr[IO_GPIO_bit]` to select `gpio_rdata`.
+
+---
+
+## Step 4: Software Validation
+
+### 4.1 — Address Calculation
+
+The three registers live at consecutive word addresses within the GPIO IP's slot:
+
+| Register | Offset | Byte Address | `mem_addr[3:2]` |
+|----------|--------|-------------|-----------------|
+| `GPIO_DATA` | `0x00` | `0x400020` | `2'b00` |
+| `GPIO_DIR`  | `0x04` | `0x400024` | `2'b01` |
+| `GPIO_READ` | `0x08` | `0x400028` | `2'b10` |
+
+In `io.h`, peripheral offsets use `(1 << bit) << 2`. For GPIO (bit 3): `(1<<3)<<2 = 32`. Each register then adds its word offset × 4:
+
+```c
+#define IO_GPIO_DATA  32   // base: 0x400020
+#define IO_GPIO_DIR   36   // base + 4: 0x400024
+#define IO_GPIO_READ  40   // base + 8: 0x400028
+```
+
+---
+
+### 4.2 — Write the C Test Program
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+gedit gpio_test.c
+```
+
+![gpio_test.c — multi-register firmware](Task5/s4_gpio_test.png)
+
+---
+
+### 4.3 — Compile the Firmware
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+make gpio_test.bram.hex
+```
+
+![make gpio_test.bram.hex — 47% BRAM occupancy](Task5/s4_make_bram_hex.png)
+
+The Makefile handles the full bare-metal pipeline:
+1. Cross-compile `gpio_test.c` with `riscv64-unknown-elf-gcc`
+2. Link with startup code (`start.S`, `putchar.S`, etc.)
+3. Convert ELF → hex via `firmware_words`
+4. Auto-copy `gpio_test.bram.hex` → `../RTL/firmware.hex`
+
+**BRAM occupancy: 47%** (up from 45% in Task-4 — the extra registers add a small code footprint)
+
+---
+
+### 4.4 — Run the Simulation
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+iverilog -g2012 -DBENCH -o gpio_sim riscv.v bench.v
+vvp gpio_sim
+```
+
+> **Note:** `gpio_ip.v` is not listed separately — `riscv.v` already includes it internally via `` `include "gpio_ip.v" ``. The `-DBENCH` flag enables the UART `$write` block so `printf` output appears in the terminal.
+
+![Simulation output — all 5 tests correct](Task5/s4_output.png)
+
+```
+GPIO_DIR  write 0xFFFFFFFF -> readback: 0xFFFFFFFF
+GPIO_DATA write 0xDEADBEEF -> readback: 0xDEADBEEF
+GPIO_READ              -> value: 0xDEADBEEF
+GPIO_DIR  partial 0xFF -> readback: 0x000000FF
+GPIO_READ partial      -> value: 0x000000EF
+$finish called at 123136060000 (1ps)
+```
+
+All 5 tests match expected values. The direction mask (`0x000000FF & 0xDEADBEEF = 0x000000EF`) proves the `GPIO_READ` logic is working correctly.
+
+---
+
+### 4.5 — GTKWave Waveform Analysis
+
+```bash
+gtkwave gpio_sim.vcd
+```
+
+Two views were captured — one for each write operation — to clearly show offset-based register selection.
+
+**View 1 — Offset `2'b00` (writing `GPIO_DATA`):**
+
+![GTKWave — offset=00, gpio_data receiving DEADBEEF](Task5/s4_gtk_off-00.png)
+
+At this timestamp:
+- `offset[1:0] = 00` → `GPIO_DATA` selected
+- `wdata = DEADBEEF`, `wstrb = 1`, `sel = 1`
+- `gpio_data` updates to `DEADBEEF`
+- `gpio_dir = FFFFFFFF` (already written)
+- `gpio_read = DEADBEEF` (= `DEADBEEF & FFFFFFFF`)
+
+---
+
+**View 2 — Offset `2'b01` (writing `GPIO_DIR`):**
+
+![GTKWave — offset=01, gpio_dir receiving FFFFFFFF](Task5/s4_gtk_off-01.png)
+
+At this timestamp:
+- `offset[1:0] = 01` → `GPIO_DIR` selected
+- `wdata = FFFFFFFF`, `wstrb = 1`, `sel = 1`
+- `gpio_dir` updates to `FFFFFFFF`
+- `gpio_data` is unchanged at `00000000`
+- `gpio_read = 00000000` (= `00000000 & FFFFFFFF`, data not yet written)
+
+---
+
+## 📋 Submission Answers
+
+### How Address Offsets Are Decoded
+
+```
+CPU accesses 0x400020  → mem_addr[3:2] = 2'b00 → GPIO_DATA
+CPU accesses 0x400024  → mem_addr[3:2] = 2'b01 → GPIO_DIR
+CPU accesses 0x400028  → mem_addr[3:2] = 2'b10 → GPIO_READ
+```
+
+The SoC (`riscv.v`) routes the 2-bit offset as:
+```verilog
+wire [1:0] gpio_offset = mem_addr[3:2];
+```
+This wire goes directly into `gpio_ip.v` as the `offset` port. All decoding happens **inside the IP** — the SoC mux only checks whether GPIO is selected at all (`mem_wordaddr[IO_GPIO_bit]`), not which sub-register.
+
+### How Direction Affects Behavior
+
+`GPIO_READ` is computed combinationally:
+```verilog
+assign gpio_read = gpio_data & gpio_dir;
+```
+
+| Bit in `GPIO_DIR` | Effect on that bit in `GPIO_READ` |
+|--------------------|----------------------------------|
+| `1` (output)       | `GPIO_READ[bit] = GPIO_DATA[bit]` — driven value visible |
+| `0` (input)        | `GPIO_READ[bit] = 0` — pin masked, reads as 0 |
+
+This is the standard real-world GPIO peripheral behavior — you can't "read back" a value on a pin that's configured as input unless the hardware has a separate pin-state capture path.
+
+### What Was Validated
+
+- ✅ `GPIO_DIR = 0xFFFFFFFF` → readback `0xFFFFFFFF`
+- ✅ `GPIO_DATA = 0xDEADBEEF` → readback `0xDEADBEEF`
+- ✅ `GPIO_READ` = `0xDEADBEEF` (full mask — all bits output)
+- ✅ `GPIO_DIR = 0x000000FF` (partial) → readback `0x000000FF`
+- ✅ `GPIO_READ` = `0x000000EF` (correctly masked: `DEADBEEF & 000000FF`)
+- ✅ GTKWave confirms `offset` selects the correct register on every access
+- ✅ Program completed normally — `$finish` called, no hangs
+
+---
+
+## 📊 Results Summary
+
+| Step | Status |
+|------|--------|
+| Step 1: Study Task-4 GPIO IP — identify what to extend | ✅ Done |
+| Step 2: Implement multi-register `gpio_ip.v` — 3 registers, offset decoding | ✅ Done |
+| Step 2: Verify on EDA Playground — all 5 tests pass | ✅ Done |
+| Step 3: Integrate into `riscv.v` — new wires + updated instantiation | ✅ Done |
+| Step 4: Write `gpio_test.c` — direction, data, readback | ✅ Done |
+| Step 4: Compile firmware — `make gpio_test.bram.hex` (47% occupancy) | ✅ Done |
+| Step 4: Simulate — `iverilog` + `vvp` — all 5 outputs correct | ✅ Done |
+| Step 4: GTKWave — offset-00 and offset-01 views captured | ✅ Done |
+| Step 5: Hardware validation (FPGA board) | ⚠️ Skipped — board not available |
+
+---
+
+## 📁 Files Created / Modified
+
+| File | Location | Change |
+|------|----------|--------|
+| `gpio_ip.v` | `RTL/` | Modified — added `offset`, `gpio_data`, `gpio_dir`, `gpio_read` ports + 3-register logic |
+| `riscv.v` | `RTL/` | Modified — added `gpio_offset` wire, updated GPIO wire declarations and instantiation |
+| `gpio_test.c` | `Firmware/` | Modified — added `IO_GPIO_DATA`, `IO_GPIO_DIR`, `IO_GPIO_READ` defines and 5 test cases |
+| `bench.v` | `RTL/` | Unchanged — same testbench stubs from Task-4 work correctly |
+
+---
+
+</details>
+
+---

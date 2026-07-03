@@ -1602,3 +1602,501 @@ This is the standard real-world GPIO peripheral behavior — you can't "read bac
 </details>
 
 ---
+
+<details>
+<summary><b>Task-6:</b> SPI Master IP — Real Peripheral IP Development (Core Contributor Task)</summary>
+<br>
+
+---
+
+## 🎯 Objective
+
+Design, integrate, and validate a **minimal SPI Master IP** as a real memory-mapped peripheral inside the RISC-V SoC — the same way peripheral IPs are owned and built in semiconductor and FPGA teams.
+
+**IP Name:** SPI Master (Single-Byte, Mode 0)
+
+This IP allows the RISC-V CPU to:
+- Configure SPI clock speed via a clock divider
+- Transmit an 8-bit byte over MOSI
+- Receive an 8-bit byte over MISO simultaneously
+- Monitor transfer status (BUSY / DONE) via a status register
+
+**SPI Mode 0 (CPOL=0, CPHA=0):**
+- SCLK idles **low**
+- Data shifts out on **falling edge** (MOSI)
+- Data sampled on **rising edge** (MISO)
+- Exactly **8 bits** per transfer
+
+---
+
+## 🖥️ Environment
+
+| Tool | Purpose |
+|------|---------|
+| Oracle VirtualBox (Ubuntu) | Local development machine |
+| `gedit` | RTL and firmware editing |
+| `riscv64-unknown-elf-gcc` | RISC-V cross-compiler |
+| `iverilog -g2012` + `vvp` | Verilog simulation |
+| `gtkwave` | Waveform viewer |
+
+**Working directories:**
+- RTL: `~/vsdfpga_labs/basicRISCV/RTL/`
+- Firmware: `~/vsdfpga_labs/basicRISCV/Firmware/`
+
+---
+
+## Step 1: Register Map
+
+### 1.1 — Base Address
+
+`IO_SPI_bit = 4` → base offset = `(1 << 4) << 2 = 64` → **SPI Base Address = `0x400040`**
+
+This follows the same 1-hot addressing pattern used by all peripherals in this SoC.
+
+### 1.2 — Register Map
+
+| Offset | Name | Address | R/W | Bits | Description |
+|--------|------|---------|-----|------|-------------|
+| `0x00` | `CTRL` | `0x400040` | R/W | [0]=EN, [1]=START, [15:8]=CLKDIV | Control register |
+| `0x04` | `TXDATA` | `0x400044` | W | [7:0] | Byte to transmit |
+| `0x08` | `RXDATA` | `0x400048` | R | [7:0] | Byte received from last transfer |
+| `0x0C` | `STATUS` | `0x40004C` | R/W | [0]=BUSY, [1]=DONE | Transfer status |
+
+### 1.3 — Register Bit Details
+
+**CTRL (`0x00`):**
+- Bit `[0]` — `EN`: Enable the SPI block (`1` = enabled)
+- Bit `[1]` — `START`: Writing `1` triggers a transfer if not busy; **auto-clears internally** (not stored as a register bit)
+- Bits `[15:8]` — `CLKDIV`: SCLK toggles every `(CLKDIV+1)` system clock cycles
+
+**TXDATA (`0x04`):**
+- Bits `[7:0]` — byte to transmit; writing loads the TX shift register
+
+**RXDATA (`0x08`):**
+- Bits `[7:0]` — received byte from the last completed transfer; **read-only**
+
+**STATUS (`0x0C`):**
+- Bit `[0]` — `BUSY`: `1` while transfer is in progress
+- Bit `[1]` — `DONE`: `1` when transfer finishes; **write-1-to-clear**
+
+### 1.4 — Offset Decoding
+
+`mem_addr[3:2]` selects which register is accessed within the SPI IP:
+
+| `mem_addr[3:2]` | Register |
+|-----------------|---------|
+| `2'b00` | CTRL |
+| `2'b01` | TXDATA |
+| `2'b10` | RXDATA |
+| `2'b11` | STATUS |
+
+---
+
+## Step 2: RTL Implementation — `spi_master.v`
+
+The SPI Master IP was written as a clean, synchronous Verilog module with:
+- No hard-coded magic values (all parameterized via `CLKDIV`)
+- Proper active-low reset behavior
+- Three clearly separated always blocks (write logic, state machine, read logic)
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+gedit spi_master.v
+```
+
+### 2.1 — Module Ports and Internal Registers
+
+![spi_master.v — ports and internal registers](Task6/spi_rtl_1.png)
+
+**Bus interface ports** (same pattern as `gpio_ip.v`):
+- `sel` — this IP is selected by the CPU
+- `offset[1:0]` — which register (`mem_addr[3:2]`)
+- `wstrb` — CPU is writing
+- `wdata[31:0]` — data from CPU
+- `rdata[31:0]` — data back to CPU
+
+**SPI signal ports:**
+- `sclk` — SPI clock output
+- `mosi` — data out to slave (driven by `shift_tx[7]`)
+- `miso` — data in from slave
+- `cs_n` — chip select, active low
+
+**Internal registers:**
+- `en`, `clkdiv` — stored from CTRL
+- `txdata`, `rxdata` — TX byte to send, RX byte received
+- `busy`, `done` — status flags
+- `shift_tx[7:0]` — TX conveyor belt (MSB shifts out first on MOSI)
+- `shift_rx[7:0]` — RX conveyor belt (MISO bits shift in)
+- `bit_cnt[2:0]` — counts 7 down to 0 (8 bits per transfer)
+- `clk_cnt[7:0]` — counts up to `clkdiv` to generate SCLK
+
+**State machine states:**
+```verilog
+localparam IDLE     = 2'b00;
+localparam TRANSFER = 2'b01;
+localparam FINISH   = 2'b10;
+```
+
+**MOSI assignment — combinational:**
+```verilog
+assign mosi = shift_tx[7];   // MSB of TX shift register always drives MOSI
+```
+
+---
+
+### 2.2 — Register Write Logic
+
+![spi_master.v — register write block](Task6/spi_rtl_2.png)
+
+```verilog
+always @(posedge clk) begin
+    if (!resetn) begin
+        en <= 0; clkdiv <= 0; txdata <= 0; done <= 0;
+    end
+    else if (sel & wstrb) begin
+        case (offset)
+            2'b00: begin en <= wdata[0]; clkdiv <= wdata[15:8]; end  // CTRL
+            2'b01: txdata <= wdata[7:0];                              // TXDATA
+            2'b10: /* RXDATA write ignored */ ;
+            2'b11: if (wdata[1]) done <= 0;                           // clear DONE
+        endcase
+    end
+end
+```
+
+> **Key design decision:** `START` is **not stored** as a register bit. It is detected as a live pulse in the state machine — storing it would risk re-triggering the transfer on every clock cycle.
+
+---
+
+### 2.3 — State Machine + Transfer Logic
+
+![spi_master.v — state machine IDLE and TRANSFER](Task6/spi_rtl_3.png)
+
+![spi_master.v — FINISH state and read logic](Task6/spi_rtl_4.png)
+
+**IDLE state:**
+- SCLK idles low (Mode 0), CS_N high (slave deselected)
+- Detects `START` pulse: `sel & wstrb & offset==CTRL & EN=1 & START=1 & !busy`
+- On detection: loads `shift_tx` from `txdata`, asserts `cs_n=0`, sets `busy=1`, moves to TRANSFER
+
+**TRANSFER state — SPI Mode 0 timing:**
+```
+SCLK:   _____|‾‾‾‾‾|_____|‾‾‾‾‾|_____ (toggles every CLKDIV+1 cycles)
+              ↑     ↓     ↑     ↓
+           rising  falling
+           MISO    MOSI
+           sample  shift
+```
+- **Rising edge** (`!sclk` before toggle): sample MISO into `shift_rx`; if `bit_cnt==0`, go to FINISH
+- **Falling edge** (`sclk` before toggle): shift `shift_tx` left if `bit_cnt != 0`, decrement `bit_cnt`
+
+**FINISH state:**
+- Copies `shift_rx` into `rxdata`
+- Deasserts `cs_n=1`, clears `busy=0`, sets `done=1`
+- Returns to IDLE
+
+**Read logic — combinational:**
+```verilog
+2'b00: rdata = {16'b0, clkdiv, 6'b0, 1'b0, en};  // CTRL
+2'b01: rdata = {24'b0, txdata};                    // TXDATA
+2'b10: rdata = {24'b0, rxdata};                    // RXDATA
+2'b11: rdata = {30'b0, done, busy};                // STATUS
+```
+
+---
+
+## Step 3: SoC Integration
+
+Four targeted edits were made to `riscv.v`. The `spi_master.v` file was also added to the include list.
+
+### 3.1 — Add `include` at Top of `riscv.v`
+
+```verilog
+`include "clockworks.v"
+`include "emitter_uart.v"
+`include "gpio_ip.v"
+`include "spi_master.v"    // ← NEW
+```
+
+![riscv.v — include spi_master.v](Task6/inlcude_spi.png)
+
+---
+
+### 3.2 — Add `IO_SPI_bit` Localparam
+
+```verilog
+localparam IO_LEDS_bit     = 0;
+localparam IO_UART_DAT_bit = 1;
+localparam IO_UART_CNTL_bit= 2;
+localparam IO_GPIO_bit     = 3;
+localparam IO_SPI_bit      = 4;  // ← NEW SPI Master IP
+```
+
+![riscv.v — IO_SPI_bit localparam](Task6/spi_adressing.png)
+
+---
+
+### 3.3 — Declare SPI Wires
+
+```verilog
+//---------SPI Signals---------------
+wire        spi_sel    = isIO & mem_wordaddr[IO_SPI_bit];
+wire [1:0]  spi_offset = mem_addr[3:2];
+wire [31:0] spi_rdata;
+wire        spi_sclk;
+wire        spi_mosi;
+wire        spi_miso;
+wire        spi_cs_n;
+```
+
+`spi_sel` goes high only when the CPU addresses IO bit 4 — the SPI IP's exclusive slot. `spi_rdata` is driven by the module's `rdata` output port — no separate `spi_wdata` is needed; the shared `mem_wdata` bus passes directly into the module.
+
+![riscv.v — SPI wire declarations](Task6/spi_signals.png)
+
+---
+
+### 3.4 — Instantiate SPI Module + Extend IO_rdata Mux
+
+```verilog
+spi_master SPI (
+    .clk    (clk),
+    .resetn (resetn),
+    .sel    (spi_sel),
+    .offset (spi_offset),
+    .wstrb  (mem_wstrb),
+    .wdata  (mem_wdata),
+    .rdata  (spi_rdata),
+    .sclk   (spi_sclk),
+    .mosi   (spi_mosi),
+    .miso   (spi_miso),
+    .cs_n   (spi_cs_n)
+);
+
+wire [31:0] IO_rdata =
+    mem_wordaddr[IO_UART_CNTL_bit] ? {22'b0, !uart_ready, 9'b0} :
+    mem_wordaddr[IO_GPIO_bit]       ? gpio_rdata :
+    mem_wordaddr[IO_SPI_bit]        ? spi_rdata  :   // ← NEW
+                                      32'b0;
+```
+
+![riscv.v — SPI instantiation and IO_rdata mux](Task6/spi_declare.png)
+
+---
+
+## Step 4: Software Validation
+
+### 4.1 — Address Calculation
+
+| Register | C Define | Offset | Byte Address |
+|----------|----------|--------|-------------|
+| `CTRL` | `IO_SPI_CTRL = 64` | `0x00` | `0x400040` |
+| `TXDATA` | `IO_SPI_TXDATA = 68` | `0x04` | `0x400044` |
+| `RXDATA` | `IO_SPI_RXDATA = 72` | `0x08` | `0x400048` |
+| `STATUS` | `IO_SPI_STATUS = 76` | `0x0C` | `0x40004C` |
+
+Pattern: `IO_SPI_bit=4` → base = `(1<<4)<<2 = 64`; each register adds `+4`.
+
+---
+
+### 4.2 — Write `spi_test.c`
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+gedit spi_test.c
+```
+
+![spi_test.c — part 1 (Test1 and Test2)](Task6/spi_test_1.png)
+
+![spi_test.c — part 2 (Test3 and Test4)](Task6/spi_test_2.png)
+
+**Software flow for each test:**
+```c
+// 1. Set CLKDIV=4, EN=1
+IO_OUT(IO_SPI_CTRL, (4 << 8) | 1);
+
+// 2. Load TX byte
+IO_OUT(IO_SPI_TXDATA, 0xA5);
+
+// 3. Start transfer (EN=1, START=1, CLKDIV=4)
+IO_OUT(IO_SPI_CTRL, (4 << 8) | 3);
+
+// 4. Poll STATUS until DONE=1 (bit 1)
+while (!(IO_IN(IO_SPI_STATUS) & 0x2));
+
+// 5. Read and print RXDATA
+printf("Test1: TXDATA=0xA5 -> RXDATA=0x%x\n", IO_IN(IO_SPI_RXDATA));
+
+// 6. Clear DONE flag (write-1-to-clear)
+IO_OUT(IO_SPI_STATUS, 0x2);
+```
+
+---
+
+### 4.3 — Compile the Firmware
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/Firmware
+make spi_test.bram.hex
+```
+
+![make spi_test.bram.hex — 49% BRAM occupancy](Task6/make_bram_hex.png)
+
+**BRAM occupancy: 49%** — the polling loop and 4 test cases fit comfortably within the 1536-word BRAM.
+
+---
+
+### 4.4 — Add Loopback to `bench.v`
+
+For simulation, `MISO` is tied directly to `MOSI` — whatever is transmitted comes straight back, proving TX and RX logic simultaneously.
+
+```bash
+gedit ~/vsdfpga_labs/basicRISCV/RTL/bench.v
+```
+
+```verilog
+SOC uut(
+    .RESET(RESET), .LEDS(LEDS), .RXD(RXD), .TXD(TXD)
+);
+
+assign uut.spi_miso = uut.spi_mosi;   // ← loopback: MISO tied to MOSI
+```
+
+![bench.v — loopback assignment](Task6/bench_v.png)
+
+---
+
+### 4.5 — Run the Simulation
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+iverilog -g2012 -DBENCH -o spi_sim riscv.v bench.v
+vvp spi_sim
+```
+
+> `spi_master.v` is not listed separately — `riscv.v` includes it internally via `` `include "spi_master.v" ``. The `-DBENCH` flag enables the UART `$write` block so `printf` output appears in the terminal.
+
+![Simulation output — all 4 tests passing](Task6/spi_result.png)
+
+```
+Test1: TXDATA=0xA5 -> RXDATA=0x000000A5
+Test2: TXDATA=0xFF -> RXDATA=0x000000FF
+Test3: TXDATA=0x00 -> RXDATA=0x00000000
+Test4: TXDATA=0xA5 -> RXDATA=0x000000A5
+$finish called at 91470220000 (1ps)
+```
+
+All 4 loopback tests pass — TXDATA equals RXDATA in every case. ✅
+
+---
+
+## Step 5: GTKWave Waveform Analysis
+
+```bash
+gtkwave spi_sim.vcd
+```
+
+### 5.1 — Bit-by-Bit Transfer View (Test 1 — 0xA5)
+
+![GTKWave — zoomed in, bit-by-bit SCLK transfer of 0xA5](Task6/gtk_wave_1.png)
+
+`0xA5 = 1010 0101` transmitted MSB first. The waveform shows:
+
+| Signal | What you see | What it proves |
+|--------|-------------|----------------|
+| `sclk` | 8 clean pulses | Clock divider working correctly |
+| `mosi` | matches `1010 0101` bit pattern | TX shift register shifting MSB first |
+| `miso` | identical to `mosi` | Loopback connected, MISO sampled correctly |
+| `shift_rx` | builds `00000001 → 00000010 → ... → 10100101` | MISO sampled on every rising edge |
+| `shift_tx` | empties `10100101 → 01001010 → ... → 10000000` | Shift left each falling edge |
+| `rxdata` | updates to `A5` after 8th bit | Final capture in FINISH state correct |
+| `cs_n` | low during transfer | Slave selected for full duration |
+| `busy` | goes `0` after transfer | State machine reached FINISH |
+| `done` | goes `1` after transfer | DONE flag set for CPU to poll |
+
+**`shift_rx` building up step by step:**
+```
+00000001 → 00000010 → 00000101 → 00001010 →
+00010100 → 00101001 → 01010010 → 10100101  (= 0xA5 ✅)
+```
+
+---
+
+### 5.2 — Test 2 Transfer View (0xFF)
+
+![GTKWave — Test2 transfer of 0xFF](Task6/gtkwave_2.png)
+
+`0xFF = 1111 1111` — all bits high. The waveform shows:
+- `mosi = 1` continuously for all 8 bits
+- `shift_rx` fills with ones: `00000001 → 00000011 → ... → 11111111`
+- `rxdata` updates to `FF` at the end
+- `cs_n` goes low for the full transfer, high on completion
+- `busy = 1` during transfer, drops to `0` in FINISH
+
+---
+
+## 📋 Integration Approach
+
+### How Address Decoding Works
+
+```
+CPU accesses 0x400040  →  mem_addr[22]=1 (isIO)
+                       →  mem_wordaddr[4]=1 (IO_SPI_bit)
+                       →  spi_sel=1 (SPI IP selected)
+                       →  mem_addr[3:2] = 2'b00 → CTRL register
+```
+
+```
+CPU accesses 0x400048  →  spi_sel=1
+                       →  mem_addr[3:2] = 2'b10 → RXDATA register
+```
+
+The SoC's `IO_rdata` mux checks only **which IP** is selected (`mem_wordaddr[IO_SPI_bit]`). All **sub-register** selection happens inside `spi_master.v` via the `offset` port — keeping the SoC integration clean.
+
+### Why START is Not a Stored Register
+
+Storing `START` would mean the bit stays `1` across clock cycles, re-triggering the transfer every cycle. Instead, START is detected as a **live pulse** — the state machine checks `wdata[1]` at the exact clock cycle the CPU writes CTRL, then immediately transitions to TRANSFER. This is a critical timing distinction for one-shot trigger logic.
+
+---
+
+## 📊 Results Summary
+
+| Step | Status |
+|------|--------|
+| Step 1: Register map — 4 registers, base `0x400040`, offset decoding | ✅ Done |
+| Step 2: `spi_master.v` — FSM, clock divider, shift registers, read/write logic | ✅ Done |
+| Step 3: `riscv.v` integration — localparam, wires, instantiation, mux | ✅ Done |
+| Step 4: `spi_test.c` — 4 loopback tests, poll DONE, UART output | ✅ Done |
+| Step 4: `make spi_test.bram.hex` — 49% BRAM occupancy | ✅ Done |
+| Step 5: Simulation — all 4 tests pass (`0xA5`, `0xFF`, `0x00`, `0xA5`) | ✅ Done |
+| Step 5: GTKWave — bit-by-bit shift verified, cs_n, busy, done confirmed | ✅ Done |
+| Hardware validation (FPGA board) | ⚠️ Skipped — board not available |
+
+---
+
+## 📁 Files Created / Modified
+
+| File | Location | Change |
+|------|----------|--------|
+| `spi_master.v` | `RTL/` | **New** — complete SPI Master IP RTL |
+| `riscv.v` | `RTL/` | Modified — `IO_SPI_bit`, SPI wires, instantiation, `IO_rdata` mux, include |
+| `spi_test.c` | `Firmware/` | **New** — 4-test C validation program |
+| `bench.v` | `RTL/` | Modified — loopback `assign uut.spi_miso = uut.spi_mosi` |
+
+---
+
+## 📂 Submission Structure
+
+```
+ip/spi_master/
+├── rtl/
+│   └── spi_master.v
+├── test/
+│   └── spi_test.c
+└── README.md
+```
+
+---
+
+</details>
+
+---

@@ -2023,7 +2023,7 @@ gtkwave spi_sim.vcd
 
 ### 5.2 — Test 2 Transfer View (0xFF)
 
-![GTKWave — Test2 transfer of 0xFF](Task6/gtkwave_2.png)
+![GTKWave — Test2 transfer of 0xFF](Task6/SPI Master/screenshots/gtkwave_2.png)
 
 `0xFF = 1111 1111` — all bits high. The waveform shows:
 - `mosi = 1` continuously for all 8 bits

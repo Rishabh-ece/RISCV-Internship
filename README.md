@@ -1706,7 +1706,7 @@ gedit spi_master.v
 
 ### 2.1 — Module Ports and Internal Registers
 
-![spi_master.v — ports and internal registers](Task6/SPI Master/screenshots/spi_rtl_1.png)
+![spi_master.v — ports and internal registers](Task6/spi_master/screenshots/spi_rtl_1.png)
 
 **Bus interface ports** (same pattern as `gpio_ip.v`):
 - `sel` — this IP is selected by the CPU
@@ -1746,7 +1746,7 @@ assign mosi = shift_tx[7];   // MSB of TX shift register always drives MOSI
 
 ### 2.2 — Register Write Logic
 
-![spi_master.v — register write block](Task6/SPI Master/screenshots/spi_rtl_2.png)
+![spi_master.v — register write block](Task6/spi_master/screenshots/spi_rtl_2.png)
 
 ```verilog
 always @(posedge clk) begin
@@ -1770,9 +1770,9 @@ end
 
 ### 2.3 — State Machine + Transfer Logic
 
-![spi_master.v — state machine IDLE and TRANSFER](Task6/SPI Master/screenshots/spi_rtl_3.png)
+![spi_master.v — state machine IDLE and TRANSFER](Task6/spi_master/screenshots/spi_rtl_3.png)
 
-![spi_master.v — FINISH state and read logic](Task6/SPI Master/screenshots/spi_rtl_4.png)
+![spi_master.v — FINISH state and read logic](Task6/spi_master/screenshots/spi_rtl_4.png)
 
 **IDLE state:**
 - SCLK idles low (Mode 0), CS_N high (slave deselected)
@@ -1818,7 +1818,7 @@ Four targeted edits were made to `riscv.v`. The `spi_master.v` file was also add
 `include "spi_master.v"    // ← NEW
 ```
 
-![riscv.v — include spi_master.v](Task6/SPI Master/screenshots/inlcude_spi.png)
+![riscv.v — include spi_master.v](Task6/spi_master/screenshots/inlcude_spi.png)
 
 ---
 
@@ -1832,7 +1832,7 @@ localparam IO_GPIO_bit     = 3;
 localparam IO_SPI_bit      = 4;  // ← NEW SPI Master IP
 ```
 
-![riscv.v — IO_SPI_bit localparam](Task6/SPI Master/screenshots/spi_adressing.png)
+![riscv.v — IO_SPI_bit localparam](Task6/spi_master/screenshots/spi_adressing.png)
 
 ---
 
@@ -1851,7 +1851,7 @@ wire        spi_cs_n;
 
 `spi_sel` goes high only when the CPU addresses IO bit 4 — the SPI IP's exclusive slot. `spi_rdata` is driven by the module's `rdata` output port — no separate `spi_wdata` is needed; the shared `mem_wdata` bus passes directly into the module.
 
-![riscv.v — SPI wire declarations](Task6/SPI Master/screenshots/spi_signals.png)
+![riscv.v — SPI wire declarations](Task6/spi_master/screenshots/spi_signals.png)
 
 ---
 
@@ -1879,7 +1879,7 @@ wire [31:0] IO_rdata =
                                       32'b0;
 ```
 
-![riscv.v — SPI instantiation and IO_rdata mux](Task6/SPI Master/screenshots/spi_declare.png)
+![riscv.v — SPI instantiation and IO_rdata mux](Task6/spi_master/screenshots/spi_declare.png)
 
 ---
 
@@ -1905,9 +1905,9 @@ cd ~/vsdfpga_labs/basicRISCV/Firmware
 gedit spi_test.c
 ```
 
-![spi_test.c — part 1 (Test1 and Test2)](Task6/SPI Master/screenshots/spi_test_1.png)
+![spi_test.c — part 1 (Test1 and Test2)](Task6/spi_master/screenshots/spi_test_1.png)
 
-![spi_test.c — part 2 (Test3 and Test4)](Task6/SPI Master/screenshots/spi_test_2.png)
+![spi_test.c — part 2 (Test3 and Test4)](Task6/spi_master/screenshots/spi_test_2.png)
 
 **Software flow for each test:**
 ```c
@@ -1939,7 +1939,7 @@ cd ~/vsdfpga_labs/basicRISCV/Firmware
 make spi_test.bram.hex
 ```
 
-![make spi_test.bram.hex — 49% BRAM occupancy](Task6/SPI Master/screenshots/make_bram_hex.png)
+![make spi_test.bram.hex — 49% BRAM occupancy](Task6/spi_master/screenshots/make_bram_hex.png)
 
 **BRAM occupancy: 49%** — the polling loop and 4 test cases fit comfortably within the 1536-word BRAM.
 
@@ -1961,7 +1961,7 @@ SOC uut(
 assign uut.spi_miso = uut.spi_mosi;   // ← loopback: MISO tied to MOSI
 ```
 
-![bench.v — loopback assignment](Task6/SPI Master/screenshots/bench_v.png)
+![bench.v — loopback assignment](Task6/spi_master/screenshots/bench_v.png)
 
 ---
 
@@ -1975,7 +1975,7 @@ vvp spi_sim
 
 > `spi_master.v` is not listed separately — `riscv.v` includes it internally via `` `include "spi_master.v" ``. The `-DBENCH` flag enables the UART `$write` block so `printf` output appears in the terminal.
 
-![Simulation output — all 4 tests passing](Task6/SPI Master/screenshots/spi_result.png)
+![Simulation output — all 4 tests passing](Task6/spi_master/screenshots/spi_result.png)
 
 ```
 Test1: TXDATA=0xA5 -> RXDATA=0x000000A5
@@ -1997,7 +1997,7 @@ gtkwave spi_sim.vcd
 
 ### 5.1 — Bit-by-Bit Transfer View (Test 1 — 0xA5)
 
-![GTKWave — zoomed in, bit-by-bit SCLK transfer of 0xA5](Task6/SPI Master/screenshots/gtk_wave_1.png)
+![GTKWave — zoomed in, bit-by-bit SCLK transfer of 0xA5](Task6/spi_master/screenshots/gtk_wave_1.png)
 
 `0xA5 = 1010 0101` transmitted MSB first. The waveform shows:
 
@@ -2023,7 +2023,7 @@ gtkwave spi_sim.vcd
 
 ### 5.2 — Test 2 Transfer View (0xFF)
 
-![GTKWave — Test2 transfer of 0xFF](Task6/SPI Master/screenshots/gtkwave_2.png)
+![GTKWave — Test2 transfer of 0xFF](Task6/spi_master/screenshots/gtkwave_2.png)
 
 `0xFF = 1111 1111` — all bits high. The waveform shows:
 - `mosi = 1` continuously for all 8 bits

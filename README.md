@@ -2100,3 +2100,11 @@ ip/spi_master/
 </details>
 
 ---
+
+<details>
+<summary><b>Task-7:</b> Commercial-Grade IP Documentation & Release</summary>
+<br>
+WIP – The VSD Squadron FPGA board was received on Monday night, so the task is still in progress.
+</details>
+
+---

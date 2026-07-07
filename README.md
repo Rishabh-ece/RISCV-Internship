@@ -1706,7 +1706,7 @@ gedit spi_master.v
 
 ### 2.1 — Module Ports and Internal Registers
 
-![spi_master.v — ports and internal registers](Task6/spi_master/screenshots/spi_rtl_1.png)
+![spi_master.v — ports and internal registers](Task6/spi_rtl_1.png)
 
 **Bus interface ports** (same pattern as `gpio_ip.v`):
 - `sel` — this IP is selected by the CPU
@@ -1746,7 +1746,7 @@ assign mosi = shift_tx[7];   // MSB of TX shift register always drives MOSI
 
 ### 2.2 — Register Write Logic
 
-![spi_master.v — register write block](Task6/spi_master/screenshots/spi_rtl_2.png)
+![spi_master.v — register write block](Task6/spi_rtl_2.png)
 
 ```verilog
 always @(posedge clk) begin
@@ -1770,9 +1770,9 @@ end
 
 ### 2.3 — State Machine + Transfer Logic
 
-![spi_master.v — state machine IDLE and TRANSFER](Task6/spi_master/screenshots/spi_rtl_3.png)
+![spi_master.v — state machine IDLE and TRANSFER](Task6/spi_rtl_3.png)
 
-![spi_master.v — FINISH state and read logic](Task6/spi_master/screenshots/spi_rtl_4.png)
+![spi_master.v — FINISH state and read logic](Task6/spi_rtl_4.png)
 
 **IDLE state:**
 - SCLK idles low (Mode 0), CS_N high (slave deselected)
@@ -1818,7 +1818,7 @@ Four targeted edits were made to `riscv.v`. The `spi_master.v` file was also add
 `include "spi_master.v"    // ← NEW
 ```
 
-![riscv.v — include spi_master.v](Task6/spi_master/screenshots/inlcude_spi.png)
+![riscv.v — include spi_master.v](Task6/inlcude_spi.png)
 
 ---
 
@@ -1832,7 +1832,7 @@ localparam IO_GPIO_bit     = 3;
 localparam IO_SPI_bit      = 4;  // ← NEW SPI Master IP
 ```
 
-![riscv.v — IO_SPI_bit localparam](Task6/spi_master/screenshots/spi_adressing.png)
+![riscv.v — IO_SPI_bit localparam](Task6/spi_adressing.png)
 
 ---
 
@@ -1851,7 +1851,7 @@ wire        spi_cs_n;
 
 `spi_sel` goes high only when the CPU addresses IO bit 4 — the SPI IP's exclusive slot. `spi_rdata` is driven by the module's `rdata` output port — no separate `spi_wdata` is needed; the shared `mem_wdata` bus passes directly into the module.
 
-![riscv.v — SPI wire declarations](Task6/spi_master/screenshots/spi_signals.png)
+![riscv.v — SPI wire declarations](Task6/spi_signals.png)
 
 ---
 
@@ -1879,7 +1879,7 @@ wire [31:0] IO_rdata =
                                       32'b0;
 ```
 
-![riscv.v — SPI instantiation and IO_rdata mux](Task6/spi_master/screenshots/spi_declare.png)
+![riscv.v — SPI instantiation and IO_rdata mux](Task6/spi_declare.png)
 
 ---
 
@@ -1905,9 +1905,9 @@ cd ~/vsdfpga_labs/basicRISCV/Firmware
 gedit spi_test.c
 ```
 
-![spi_test.c — part 1 (Test1 and Test2)](Task6/spi_master/screenshots/spi_test_1.png)
+![spi_test.c — part 1 (Test1 and Test2)](Task6/spi_test_1.png)
 
-![spi_test.c — part 2 (Test3 and Test4)](Task6/spi_master/screenshots/spi_test_2.png)
+![spi_test.c — part 2 (Test3 and Test4)](Task6/spi_test_2.png)
 
 **Software flow for each test:**
 ```c
@@ -1939,7 +1939,7 @@ cd ~/vsdfpga_labs/basicRISCV/Firmware
 make spi_test.bram.hex
 ```
 
-![make spi_test.bram.hex — 49% BRAM occupancy](Task6/spi_master/screenshots/make_bram_hex.png)
+![make spi_test.bram.hex — 49% BRAM occupancy](Task6/make_bram_hex.png)
 
 **BRAM occupancy: 49%** — the polling loop and 4 test cases fit comfortably within the 1536-word BRAM.
 
@@ -1961,7 +1961,7 @@ SOC uut(
 assign uut.spi_miso = uut.spi_mosi;   // ← loopback: MISO tied to MOSI
 ```
 
-![bench.v — loopback assignment](Task6/spi_master/screenshots/bench_v.png)
+![bench.v — loopback assignment](Task6/bench_v.png)
 
 ---
 
@@ -1975,7 +1975,7 @@ vvp spi_sim
 
 > `spi_master.v` is not listed separately — `riscv.v` includes it internally via `` `include "spi_master.v" ``. The `-DBENCH` flag enables the UART `$write` block so `printf` output appears in the terminal.
 
-![Simulation output — all 4 tests passing](Task6/spi_master/screenshots/spi_result.png)
+![Simulation output — all 4 tests passing](Task6/spi_result.png)
 
 ```
 Test1: TXDATA=0xA5 -> RXDATA=0x000000A5
@@ -1997,7 +1997,7 @@ gtkwave spi_sim.vcd
 
 ### 5.1 — Bit-by-Bit Transfer View (Test 1 — 0xA5)
 
-![GTKWave — zoomed in, bit-by-bit SCLK transfer of 0xA5](Task6/spi_master/screenshots/gtk_wave_1.png)
+![GTKWave — zoomed in, bit-by-bit SCLK transfer of 0xA5](Task6/gtk_wave_1.png)
 
 `0xA5 = 1010 0101` transmitted MSB first. The waveform shows:
 
@@ -2023,7 +2023,7 @@ gtkwave spi_sim.vcd
 
 ### 5.2 — Test 2 Transfer View (0xFF)
 
-![GTKWave — Test2 transfer of 0xFF](Task6/spi_master/screenshots/gtkwave_2.png)
+![GTKWave — Test2 transfer of 0xFF](Task6/gtkwave_2.png)
 
 `0xFF = 1111 1111` — all bits high. The waveform shows:
 - `mosi = 1` continuously for all 8 bits
@@ -2058,6 +2058,112 @@ Storing `START` would mean the bit stays `1` across clock cycles, re-triggering 
 
 ---
 
+## Step 6: Hardware Validation — VSDSquadron FPGA Mini
+
+The same RTL used in simulation was synthesized and flashed to the **VSDSquadron FPGA Mini** (iCE40UP5k, sg48 package). Hardware validation is mandatory per the Task-6 spec.
+
+### 6.1 — Expose SPI Signals as Top-Level Ports
+
+For hardware use, the SPI signals needed to be exposed outside the `SOC` module. Two changes were made to `riscv.v`:
+
+**SOC module port declaration:**
+```verilog
+module SOC (
+    input        CLK,
+    input        RESET,
+    output [4:0] LEDS,
+    input        RXD,
+    output       TXD,
+    output       SPI_SCLK,   // ← NEW
+    output       SPI_MOSI,   // ← NEW
+    input        SPI_MISO,   // ← NEW
+    output       SPI_CS_N    // ← NEW
+);
+```
+
+![SOC module — SPI ports added](Task6/output_wire.png)
+
+**Assign statements at bottom of SOC module:**
+```verilog
+assign SPI_SCLK = spi_sclk;
+assign SPI_MOSI = spi_mosi;
+assign spi_miso = SPI_MISO;
+assign SPI_CS_N = spi_cs_n;
+```
+
+![riscv.v — SPI assign statements](Task6/assign_spi.png)
+
+---
+
+### 6.2 — Add SPI Pins to PCF Constraint File
+
+Four free GPIO pins were assigned to the SPI signals in `VSDSquadronFM.pcf`:
+
+```
+set_io SPI_SCLK  2
+set_io SPI_MOSI  47
+set_io SPI_MISO  48
+set_io SPI_CS_N  46
+```
+
+![VSDSquadronFM.pcf — full pin assignments](Task6/vsdsquadronFM.png)
+
+---
+
+### 6.3 — Synthesize and Flash
+
+```bash
+cd ~/vsdfpga_labs/basicRISCV/RTL
+make build
+sudo make flash
+```
+
+**Synthesis result:**
+- Max clock frequency: **17.22 MHz** (PASS at 12.00 MHz target)
+- `1 warning, 0 errors` from nextpnr
+- Bitstream: `SOC.bin` (104090 bytes)
+
+![make build — synthesis and place-and-route output](Task6/build.png)
+
+**Flash result:**
+
+![sudo make flash — VERIFY OK, cdone: high](Task6/make_flash.png)
+
+```
+init..
+cdone: low
+reset..
+flash ID: 0xEF 0x40 0x16 0x00
+programming..
+done.
+reading..
+VERIFY OK
+cdone: high
+Bye.
+```
+
+✅ `VERIFY OK` — bitstream written and verified  
+✅ `cdone: high` — FPGA successfully configured
+
+---
+
+### 6.4 — Board Running
+
+After flashing, the RISC-V CPU boots and executes `spi_test.c` from BRAM. The LEDs on the board confirm the CPU is active and running the firmware.
+
+![VSDSquadron FPGA Mini — board running after flash](Task6/fpga_board.jpeg)
+
+**Tools used for hardware flow:**
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| `yosys` | 0.47+121 | Synthesis (`synth_ice40`) |
+| `nextpnr-ice40` | 0.7-134 | Place and route |
+| `icepack` | — | Bitstream packing |
+| `iceprog` | — | FPGA flash programming |
+
+---
+
 ## 📊 Results Summary
 
 | Step | Status |
@@ -2069,7 +2175,7 @@ Storing `START` would mean the bit stays `1` across clock cycles, re-triggering 
 | Step 4: `make spi_test.bram.hex` — 49% BRAM occupancy | ✅ Done |
 | Step 5: Simulation — all 4 tests pass (`0xA5`, `0xFF`, `0x00`, `0xA5`) | ✅ Done |
 | Step 5: GTKWave — bit-by-bit shift verified, cs_n, busy, done confirmed | ✅ Done |
-| Hardware validation (FPGA board) | ⚠️ Skipped — board not available |
+| Step 6: Hardware — synthesized, flashed, VERIFY OK, cdone: high | ✅ Done |
 
 ---
 

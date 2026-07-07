@@ -2242,8 +2242,6 @@ ip/
     │   └── spi_master.v
     |   |── riscv.v
     ├── software/
-    │   ├── spi_driver.h
-    │   ├── spi_driver.c
     │   └── spi_test.c
     ├── docs/
     │   ├── IP_User_Guide.md

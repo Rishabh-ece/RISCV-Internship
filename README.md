@@ -2213,7 +2213,7 @@ ip/spi_master/
 
 
 [Task7- SPI Master IP for VSDSquadron FM BasicRISCV Documentation](https://github.com/Rishabh-ece/RISCV-Internship/tree/main/Task7/ip/spi_master)<br>
-[VSD_Internship_Video].(https://drive.google.com/file/d/1M05xRIf5Q8KgChMV60Twap_RSMbsJnL7/view)
+[VSD_Internship_Video](https://drive.google.com/file/d/1M05xRIf5Q8KgChMV60Twap_RSMbsJnL7/view)<br>
 
 </details>
 

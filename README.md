@@ -2214,7 +2214,7 @@ ip/spi_master/
 
 [Task7- SPI Master IP for VSDSquadron FM BasicRISCV Documentation](https://github.com/Rishabh-ece/RISCV-Internship/tree/main/Task7/ip/spi_master)<br>
 [Hardware_Implementation_Video](https://drive.google.com/file/d/1M05xRIf5Q8KgChMV60Twap_RSMbsJnL7/view)<br>
-[SPI_IP_Detialed_Video](https://drive.google.com/file/d/1tzXlSofZlkz9TdRBZTPS9ezICzUVL5eq/view)<br>
+[Internship_SPI-IP_Video](https://drive.google.com/file/d/1tzXlSofZlkz9TdRBZTPS9ezICzUVL5eq/view)<br>
 
 </details>
 
